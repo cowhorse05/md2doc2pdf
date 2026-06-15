@@ -33,6 +33,20 @@ python md2docx_pdf.py -y *.md      # 批量 .md → .docx + .pdf
 python md2docx_pdf.py 报告.md -f pdf
 ```
 
+### 懒人做法（让 AI 帮你搞定）
+
+把下面这句话发给任意一个 AI 工具，它自己会 clone、装依赖、扫描你的文件夹、完成转换：
+
+**Claude Code / DeepSeek / GPT 通用：**
+
+> 帮我安装 https://github.com/cowhorse05/md2doc2pdf 这个 skill，然后把我文件夹里的文档全部转换。先检查 pandoc 有没有装，没装帮我装一下。
+
+**或者更短：**
+
+> 装 md2doc2pdf skill，把我目录下所有 md/docx/pdf 互转。
+
+AI 读到 `skill.json` 后会自己检测系统、装 pandoc、扫描文件、逐个转换。图表多的作业加一句 "drawio 也导出" 就行。
+
 ---
 
 ## 转换规则
