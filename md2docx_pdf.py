@@ -28,8 +28,92 @@ import tempfile
 from pathlib import Path
 from typing import Optional, List, Tuple, Dict
 
-VERSION = "1.5.0"
+VERSION = "1.6.0"
 REPO_URL = "https://github.com/cowhorse05/md2doc2pdf"
+
+# ── Mermaid rendering ─────────────────────────────────────────────
+
+def render_mermaid_to_png(mermaid_code: str, output_path: Path) -> bool:
+    """Render Mermaid code to PNG using mermaid.ink API.
+    Uses zlib compress + base64 encode. No dependencies needed.
+    Returns True if PNG was saved successfully.
+    """
+    import base64, zlib, urllib.request
+    try:
+        compressed = base64.urlsafe_b64encode(
+            zlib.compress(mermaid_code.encode('utf-8'), 9)
+        ).decode('ascii')
+        url = f'https://mermaid.ink/img/{compressed}'
+        urllib.request.urlretrieve(url, str(output_path))
+        return output_path.exists() and output_path.stat().st_size > 100
+    except Exception:
+        return False
+
+
+def extract_mermaid_blocks(md_path: Path) -> list:
+    """Extract all Mermaid code blocks from a markdown file.
+    Returns list of (start_line, end_line, code, suggested_filename).
+    """
+    import re
+    text = md_path.read_text(encoding='utf-8')
+    blocks = []
+    pattern = re.compile(r'```mermaid\s*\n(.*?)```', re.DOTALL)
+    for i, m in enumerate(pattern.finditer(text)):
+        code = m.group(1).strip()
+        # Generate a filename from the first line of the diagram
+        first_line = code.split('\n')[0].strip()
+        if first_line.startswith('graph') or first_line.startswith('flowchart'):
+            name = f'diagram_{i+1:02d}'
+        elif first_line.startswith('journey'):
+            name = f'journey_{i+1:02d}'
+        elif first_line.startswith('sequenceDiagram'):
+            name = f'sequence_{i+1:02d}'
+        elif first_line.startswith('gantt'):
+            name = f'gantt_{i+1:02d}'
+        elif first_line.startswith('pie'):
+            name = f'pie_{i+1:02d}'
+        else:
+            name = f'mermaid_{i+1:02d}'
+        blocks.append({
+            'index': i,
+            'code': code,
+            'name': name,
+            'start': m.start(),
+            'end': m.end(),
+        })
+    return blocks
+
+
+def render_all_mermaid_in_md(md_path: Path, output_dir: Optional[Path] = None) -> int:
+    """Scan a .md file for Mermaid blocks, render each to PNG,
+    and replace the code block with an image reference.
+    Returns the number of blocks rendered.
+    """
+    import re
+    out_dir = output_dir or md_path.parent
+    text = md_path.read_text(encoding='utf-8')
+    blocks = extract_mermaid_blocks(md_path)
+    if not blocks:
+        return 0
+
+    rendered = 0
+    # Process in reverse order to preserve positions
+    for block in reversed(blocks):
+        png_path = out_dir / f"{block['name']}.png"
+        ok = render_mermaid_to_png(block['code'], png_path)
+        if ok:
+            # Replace Mermaid code block with image reference + caption
+            caption = f"**图{block['index']+1}**"
+            replacement = f'![{caption}]({png_path.name})'
+            text = text[:block['start']] + replacement + text[block['end']:]
+            rendered += 1
+            print(f"  [MERMAID] {block['name']} → {png_path.name} ({png_path.stat().st_size:,} bytes)")
+        else:
+            print(f"  [MERMAID] {block['name']} → FAILED (network error?)")
+
+    md_path.write_text(text, encoding='utf-8')
+    return rendered
+
 
 # ── Supported extensions ────────────────────────────────────────
 MD_EXTS = {'.md', '.markdown', '.txt'}
@@ -918,6 +1002,8 @@ GitHub: {REPO_URL}
                         help='跳过确认，直接全部转换')
     parser.add_argument('--drawio', action='store_true',
                         help='启用 drawio 图表导出 (需要 drawio MCP)')
+    parser.add_argument('--render-mermaid', action='store_true',
+                        help='将 .md 中的 Mermaid 代码块渲染为 PNG 图片再转换')
     parser.add_argument('--setup', action='store_true',
                         help='运行交互式设置向导，选择安装可选组件')
     parser.add_argument('--install', action='store_true',
@@ -1023,6 +1109,14 @@ GitHub: {REPO_URL}
                 sys.exit(0)
 
         out = output_dir or Path(scan_path)
+
+        # Pre-process: render Mermaid blocks to PNG if requested
+        if args.render_mermaid:
+            for f in found.get('.md', []):
+                n = render_all_mermaid_in_md(f, out)
+                if n > 0:
+                    print(f"  已渲染 {n} 个 Mermaid 图表")
+
         total_ok, total_fail = 0, 0
         # Only convert documents (not drawio - that's MCP/agent territory)
         for ext in ['.md', '.docx', '.doc', '.pdf', '.tex']:
@@ -1040,6 +1134,13 @@ GitHub: {REPO_URL}
                 if p.suffix.lower() in ('.md', '.docx', '.doc', '.pdf', '.tex'):
                     if not p.name.startswith('~$'):
                         input_files.append(p)
+
+        # Pre-process: render Mermaid blocks to PNG if requested
+        if args.render_mermaid:
+            for f in [x for x in input_files if x.suffix == '.md']:
+                n = render_all_mermaid_in_md(f)
+                if n > 0:
+                    print(f"  已渲染 {n} 个 Mermaid 图表")
 
         # If .md and user specified -f single format, respect it
         if args.format != 'both':

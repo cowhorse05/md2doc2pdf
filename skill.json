@@ -1,7 +1,7 @@
 {
   "name": "md2docx-pdf",
-  "version": "1.5.0",
-  "description": "大学生作业一站式转换：扫描目录，读 task.md，.md/.docx/.pdf/.tex 互转 + drawio 图表导出。安装时逐项可选，最后问'要不要开始干活'。",
+  "version": "1.6.0",
+  "description": "大学生作业一站式转换：扫描目录，读 task.md，图表渲染管线（Mermaid→PNG），.md/.docx/.pdf/.tex 互转 + drawio 图表导出。安装时逐项可选。",
   "entry": "md2docx_pdf.py",
   "test": "test_converter.py",
   "task_file": "task.md",
@@ -125,7 +125,12 @@
       "drawio_files": "全文读入上下文 — 需要检查图表内部引用",
       "docx_pdf_files": "只记文件名和大小 — 不读正文，节省上下文",
       "skill_json": "全文读入 — 获取转换规则和汇报模板",
-      "task_md": "全文读入 — 理解用户需求"
+      "task_md": "全文读入 — 理解用户需求。只读不写！task.md 是任务指令，作业内容写到新文件。"
+    },
+    "task_md_readonly": {
+      "rule": "task.md 是用户的任务指令文件，永远不要修改它",
+      "why": "用户把自己的需求写在 task.md 里，agent 读了之后去执行。修改 task.md 会丢失用户的原始指令。",
+      "do_instead": ["新建 .md 文件写作业内容", "在 task.md 的「执行结果」区域写汇报", "不要在 task.md 的「我的任务」之外写内容"]
     },
 
     "no_task_md_behavior": {
@@ -148,8 +153,35 @@
     "instructions": "每次启动时打印当前版本，如果远端有新版本则提示用户运行 --update"
   },
 
+  "diagram_pipeline": {
+    "description": "DOCX 无法渲染 Mermaid 代码块，图表必须先导出为 PNG 再嵌入。",
+    "priority": ["mermaid_first", "drawio_fallback"],
+    "rules": {
+      "mermaid": {
+        "when": "简单图表：流程图、旅程图、简单架构图（节点<20）",
+        "render": "mermaid.ink API → PNG",
+        "method": "base64(zlib(mermaid_code)) → https://mermaid.ink/img/{encoded}",
+        "script": "python md2docx_pdf.py file.md --render-mermaid"
+      },
+      "drawio": {
+        "when": "复杂图表：架构全景、多层嵌套、手绘风格、UI草图",
+        "render": "DrawIO MCP export_diagram → PNG + SVG",
+        "keep_source": true,
+        "keep_source_reason": "保留 .drawio 源文件在本地，方便以后修改"
+      }
+    },
+    "mandatory_post_process": [
+      "1. 所有 Mermaid 代码块必须替换为 ![](xxx.png)",
+      "2. 所有 .drawio 引用必须替换为 ![](xxx.png)",
+      "3. 每张图下方加图注（**图N** 说明文字）",
+      "4. 确认替换完毕后再运行 pandoc 转换",
+      "5. 转换完检查 DOCX 中图片是否正常显示"
+    ],
+    "cli_flag": "--render-mermaid  自动扫描 .md → 渲染 Mermaid 块 → 替换引用 → 转换"
+  },
+
   "conversion_rules": {
-    ".md": "→ .docx + .pdf。如含 drawio 引用，先调 MCP 导出图片，替换引用路径，再转换。",
+    ".md": "→ .docx + .pdf。先走 diagram_pipeline 把图表转 PNG 替换引用，再转换。",
     ".docx": "→ .md + .pdf",
     ".doc": "→ .md + .pdf",
     ".pdf": "→ .md + .docx (pdftotext 提取文字 → md → docx)",
