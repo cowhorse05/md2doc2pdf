@@ -1,0 +1,24 @@
+{
+  "name": "md2docx-pdf",
+  "version": "1.0.0",
+  "description": "Cross-platform Markdown to DOCX & PDF converter with CJK support. Auto-detects pandoc and Chrome/Edge, prompts install instructions for missing dependencies.",
+  "author": "Li Yufeng",
+  "license": "MIT",
+  "repository": "https://github.com/cowhorse05/md2doc2pdf",
+  "keywords": ["markdown", "docx", "pdf", "pandoc", "converter", "cjk", "chinese", "cross-platform"],
+  "entry": "md2docx_pdf.py",
+  "requirements": {
+    "python": ">=3.7",
+    "mandatory": ["pandoc"],
+    "optional": ["Google Chrome / Microsoft Edge / Chromium (for PDF output)"]
+  },
+  "platforms": ["windows", "macos", "linux"],
+  "usage": "python md2docx_pdf.py <file.md> [-f {docx,pdf,both}] [-o output_dir]",
+  "examples": [
+    "python md2docx_pdf.py report.md",
+    "python md2docx_pdf.py report.md -f pdf",
+    "python md2docx_pdf.py report.md -f both",
+    "python md2docx_pdf.py *.md -f both",
+    "python md2docx_pdf.py report.md -f both -o ./output"
+  ]
+}
