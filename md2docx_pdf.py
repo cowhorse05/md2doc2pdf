@@ -2,12 +2,13 @@
 """
 md2docx_pdf.py --- 大学生作业一站式转换工具
 ============================================
-扫描目录，自动检测 .md / .docx / .pdf / .drawio，每个文件转为其余格式。
+扫描目录，自动检测 .md / .docx / .pdf / .tex / .drawio，每个文件转为其余格式。
 
 .md     → .docx + .pdf    (drawio 引用自动替换为图片)
 .docx   → .md + .pdf
 .pdf    → .md + .docx     (需要 pdftotext)
-.drawio → .png + .svg     (需要 drawio MCP，agent 处理)
+.tex    → .pdf            (需要 xelatex / pdflatex，可选)
+.drawio → .png + .svg     (需要 drawio MCP)
 
 直接跑:  python md2docx_pdf.py           扫描目录，交互式互转
 加 -y:   python md2docx_pdf.py -y        跳过询问
@@ -27,7 +28,7 @@ import tempfile
 from pathlib import Path
 from typing import Optional, List, Tuple, Dict
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 REPO_URL = "https://github.com/cowhorse05/md2doc2pdf"
 
 # ── Supported extensions ────────────────────────────────────────
@@ -35,7 +36,15 @@ MD_EXTS = {'.md', '.markdown', '.txt'}
 DOC_EXTS = {'.docx', '.doc'}
 PDF_EXTS = {'.pdf'}
 DRAWIO_EXTS = {'.drawio', '.dio'}
-ALL_EXTS = MD_EXTS | DOC_EXTS | PDF_EXTS | DRAWIO_EXTS
+TEX_EXTS = {'.tex'}
+ALL_EXTS = MD_EXTS | DOC_EXTS | PDF_EXTS | DRAWIO_EXTS | TEX_EXTS
+
+# ── LaTeX install instructions ──────────────────────────────────
+LATEX_INSTALL = {
+    'Windows': 'winget install MiKTeX.MiKTeX   (或 https://miktex.org/download)',
+    'Darwin': 'brew install --cask mactex        (约 4GB，也可用 brew install basictex)',
+    'Linux': 'sudo apt install texlive-xetex texlive-latex-extra texlive-lang-chinese',
+}
 
 # ── CSS for PDF ───────────────────────────────────────────────
 CHINESE_CSS = """<style>
@@ -136,6 +145,15 @@ PDFTOTEXT_INSTALL = {
 
 def has_pdftotext() -> bool:
     return shutil.which('pdftotext') is not None
+
+
+def has_latex() -> Optional[str]:
+    """Return the path to xelatex or pdflatex, whichever is available."""
+    for cmd in ('xelatex', 'pdflatex'):
+        p = shutil.which(cmd)
+        if p:
+            return p
+    return None
 
 
 # ── Conversion Engine ──────────────────────────────────────────
@@ -287,6 +305,29 @@ def pdf_to_text(src: Path, dst: Path) -> bool:
     return False
 
 
+def tex_to_pdf(src: Path, dst: Path, latex_cmd: str) -> bool:
+    """Compile .tex to PDF using xelatex/pdflatex.
+    Runs twice for cross-references. Cleans .aux/.log junk.
+    """
+    work_dir = dst.parent
+    base = src.stem
+
+    for _ in range(2):
+        subprocess.run(
+            [latex_cmd, '-interaction=nonstopmode',
+             '-output-directory=' + str(work_dir), str(src)],
+            capture_output=True, timeout=120, cwd=str(work_dir))
+
+    pdf = work_dir / (base + '.pdf')
+    if pdf.exists() and pdf.stat().st_size > 500:
+        if pdf.resolve() != dst.resolve():
+            shutil.move(str(pdf), str(dst))
+        for ext in ('.aux', '.log', '.out', '.toc', '.synctex.gz'):
+            (work_dir / (base + ext)).unlink(missing_ok=True)
+        return True
+    return False
+
+
 # ── Smart convert: one file → other two formats ────────────────
 
 def convert_file(src: Path, browser: str, output_dir: Path) -> Tuple[int, int]:
@@ -298,7 +339,8 @@ def convert_file(src: Path, browser: str, output_dir: Path) -> Tuple[int, int]:
     base = output_dir / src.stem
     ok, fail = 0, 0
     size = src.stat().st_size
-    label = {'.md': 'MD', '.docx': 'DOCX', '.doc': 'DOC', '.pdf': 'PDF'}.get(suffix, suffix)
+    label = {'.md': 'MD', '.docx': 'DOCX', '.doc': 'DOC',
+             '.pdf': 'PDF', '.tex': 'TEX', '.drawio': 'DRAWIO'}.get(suffix, suffix)
 
     print(f"\n[{label}] {src.name} ({size:,} bytes)")
 
@@ -319,6 +361,23 @@ def convert_file(src: Path, browser: str, output_dir: Path) -> Tuple[int, int]:
             print("SKIP (no browser)"); fail += 1
         else:
             print("FAIL"); fail += 1
+
+    elif suffix == '.tex':
+        # LaTeX → PDF (and optionally MD via pdftotext after)
+        latex_cmd = has_latex()
+        d_pdf = Path(str(base) + '.pdf')
+        if latex_cmd:
+            latex_name = Path(latex_cmd).name
+            print(f"  -> PDF:  {d_pdf.name} ... ", end='', flush=True)
+            if tex_to_pdf(src, d_pdf, latex_cmd):
+                sz = d_pdf.stat().st_size
+                print(f"OK ({sz:,} bytes) via {latex_name}"); ok += 1
+            else:
+                print("FAIL (编译错误，查看 .log)"); fail += 1
+        else:
+            print(f"  -> PDF:  SKIP (LaTeX 未安装)")
+            print(f"    安装: {LATEX_INSTALL.get(plat(), '手动安装 texlive 或 miktex')}")
+            fail += 1
 
     elif suffix in ('.docx', '.doc'):
         # DOCX → MD + PDF
@@ -368,10 +427,11 @@ def convert_file(src: Path, browser: str, output_dir: Path) -> Tuple[int, int]:
 def scan_dir(directory: str) -> Dict[str, List[Path]]:
     """Find all documents (.md/.docx/.pdf) and diagrams (.drawio) in directory."""
     found: Dict[str, List[Path]] = {
-        '.md': [], '.docx': [], '.doc': [], '.pdf': [],
+        '.md': [], '.docx': [], '.doc': [], '.pdf': [], '.tex': [],
         '.drawio': [], '.dio': [],
     }
-    patterns = ['*.md', '*.docx', '*.doc', '*.pdf', '*.drawio', '*.dio']
+    patterns = ['*.md', '*.docx', '*.doc', '*.pdf', '*.tex',
+                '*.drawio', '*.dio']
     for pat in patterns:
         for f in glob.glob(os.path.join(directory, pat)):
             p = Path(f).resolve()
@@ -440,6 +500,12 @@ GitHub: {REPO_URL}
     else:
         print("  浏览器: 未检测到 (PDF 输出将跳过)")
 
+    latex = has_latex()
+    if latex:
+        print(f"  LaTeX: {Path(latex).name}")
+    else:
+        print(f"  LaTeX: 未安装 (可选，.tex 编译需要)")
+
     # ── Determine what to convert ──────────────────────────
     output_dir = Path(args.output).resolve() if args.output else None
 
@@ -461,8 +527,8 @@ GitHub: {REPO_URL}
 
         print(f"\n  找到 {doc_total} 个文档, {len(drawio_files)} 个图表:")
         LABELS = {'.md': 'Markdown', '.docx': 'Word', '.doc': 'Word(旧)',
-                  '.pdf': 'PDF', '.drawio': 'DrawIO', '.dio': 'DrawIO'}
-        for ext in ['.md', '.docx', '.doc', '.pdf', '.drawio', '.dio']:
+                  '.pdf': 'PDF', '.tex': 'LaTeX', '.drawio': 'DrawIO', '.dio': 'DrawIO'}
+        for ext in ['.md', '.docx', '.doc', '.pdf', '.tex', '.drawio', '.dio']:
             files = found.get(ext, [])
             if files:
                 label = LABELS.get(ext, ext)
@@ -494,7 +560,7 @@ GitHub: {REPO_URL}
         out = output_dir or Path(scan_path)
         total_ok, total_fail = 0, 0
         # Only convert documents (not drawio - that's MCP/agent territory)
-        for ext in ['.md', '.docx', '.doc', '.pdf']:
+        for ext in ['.md', '.docx', '.doc', '.pdf', '.tex']:
             for f in found.get(ext, []):
                 ok, fail = convert_file(f, browser, out)
                 total_ok += ok
@@ -506,7 +572,7 @@ GitHub: {REPO_URL}
         for pattern in args.inputs:
             for m in glob.glob(pattern, recursive=True):
                 p = Path(m).resolve()
-                if p.suffix.lower() in ('.md', '.docx', '.doc', '.pdf'):
+                if p.suffix.lower() in ('.md', '.docx', '.doc', '.pdf', '.tex'):
                     if not p.name.startswith('~$'):
                         input_files.append(p)
 

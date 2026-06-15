@@ -63,6 +63,7 @@ clone 下来的仓库带了一个 `task.md` 模板，把你的文件名列进去
 | `.md` | `.docx` + `.pdf` |
 | `.docx` / `.doc` | `.md` + `.pdf` |
 | `.pdf` | `.md` + `.docx`（需 `pdftotext`） |
+| `.tex` | `.pdf`（需 xelatex/pdflatex，**可选**） |
 
 ---
 
@@ -166,6 +167,7 @@ Windows 自带 Edge，macOS 和 Linux 装 Chrome 即可。
 | 问题 | 解决 |
 |------|------|
 | pandoc 没装 | 工具会询问是否安装，选 y 自动装 |
+| LaTeX 没装 | 可选，不编译 .tex 就不需要 |
 | PDF 中文乱码 | Linux: `apt install fonts-noto-cjk` |
 | Permission denied | 关掉 Word 重试 |
 | PDF 转出来是乱码 | 扫描版 PDF（图片）无法提取文字 |

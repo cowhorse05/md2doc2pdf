@@ -16,8 +16,8 @@ from pathlib import Path
 # Add script dir to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from md2docx_pdf import (
-    pandoc_convert, any_to_pdf, pdf_to_text,
-    scan_dir, plat, find_tool, ensure_pandoc, has_pdftotext,
+    pandoc_convert, any_to_pdf, pdf_to_text, tex_to_pdf,
+    scan_dir, plat, find_tool, ensure_pandoc, has_pdftotext, has_latex,
     BROWSER_SEARCH,
 )
 
@@ -328,6 +328,73 @@ class TestPandocEnsure(unittest.TestCase):
         # Will find pandoc (we already checked before running tests)
         # but won't prompt because stdout is captured by unittest
         self.assertIsInstance(shutil.which('pandoc') is not None, bool)
+
+
+class TestLaTeX(unittest.TestCase):
+    """Test .tex compilation (requires LaTeX)."""
+
+    MINIMAL_TEX = r"""\documentclass{article}
+\begin{document}
+Hello World. \textbf{Test}.
+\end{document}
+"""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_has_latex(self):
+        result = has_latex()
+        self.assertIsInstance(result, (str, type(None)))
+
+    def test_latex_detection(self):
+        cmd = has_latex()
+        if cmd is None:
+            self.skipTest("LaTeX not installed")
+        self.assertTrue(os.path.isfile(cmd) or os.path.isabs(cmd))
+
+    def test_tex_to_pdf(self):
+        cmd = has_latex()
+        if cmd is None:
+            self.skipTest("LaTeX not installed")
+
+        src = Path(self.tmp, 'test.tex')
+        src.write_text(self.MINIMAL_TEX, encoding='utf-8')
+        dst = Path(self.tmp, 'test.pdf')
+
+        ok = tex_to_pdf(src, dst, cmd)
+        self.assertTrue(ok, "LaTeX compilation should succeed")
+        self.assertGreater(dst.stat().st_size, 500)
+
+    def test_tex_to_pdf_chinese(self):
+        cmd = has_latex()
+        if cmd is None or 'xelatex' not in str(cmd).lower():
+            self.skipTest("xelatex required for Chinese")
+
+        tex = r"""\documentclass[12pt]{article}
+\usepackage{fontspec}
+\setmainfont{SimSun}
+\begin{document}
+中文测试。你好世界。
+\end{document}
+"""
+        src = Path(self.tmp, 'chinese.tex')
+        src.write_text(tex, encoding='utf-8')
+        dst = Path(self.tmp, 'chinese.pdf')
+
+        ok = tex_to_pdf(src, dst, cmd)
+        # Chinese may fail if SimSun font not found, so don't assert True
+        if ok:
+            self.assertGreater(dst.stat().st_size, 500)
+        else:
+            self.skipTest("Chinese font not available")
+
+    def test_scan_finds_tex(self):
+        Path(self.tmp, 'paper.tex').write_text(self.MINIMAL_TEX)
+        found = scan_dir(self.tmp)
+        self.assertEqual(len(found.get('.tex', [])), 1)
 
 
 if __name__ == '__main__':
