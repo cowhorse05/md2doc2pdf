@@ -43,25 +43,53 @@
   },
 
   "agent_workflow": {
+    "complete_flow": [
+      "1. 克隆仓库后，扫描工作目录及所有子目录，列出每个文件 (含大小、类型)",
+      "2. 读取 task.md —— 判断用户是否已在「我的任务」里写了具体需求",
+      "3. 如果 task.md 只有模板占位文字 → 打印文件清单，请用户填 task.md 再执行",
+      "4. 如果 task.md 有具体内容 → 按用户勾选的要求执行",
+      "5. 检查依赖：pandoc(必装) Chrome/Edge(PDF) pdftotext(PDF→文字) LaTeX(.tex，可选)",
+      "6. 逐文件转换，按 conversion_rules 的规则",
+      "7. 遇到 .drawio：保留源文件 → MCP 导出 PNG+SVG → 替换 .md 引用 → 转换时图随文档",
+      "8. 按 reporting.template 输出结构化汇报"
+    ],
+
     "on_install": [
-      "clone 仓库到工作目录",
-      "检查 pandoc，缺失则打印安装命令并询问用户",
-      "读 task.md，了解用户需求",
-      "扫描工作目录及子目录，列出所有 .md/.docx/.pdf/.drawio 文件",
-      "把扫描结果写入 task.md 的「文件列表」表格",
-      "按 task.md 中用户勾选的要求执行转换"
+      "git clone https://github.com/cowhorse05/md2doc2pdf.git",
+      "python --version   (确认 Python 3.7+)",
+      "pandoc --version   (缺失则用 winget/brew/apt 安装，先问用户)",
+      "扫描工作目录，列出所有文件 (ls -R 或 find)",
+      "读 task.md，如果用户还没填，把文件清单展示给用户，请他勾选需求",
+      "用户说 go / 执行 → 开始转换"
     ],
-    "on_user_says_execute_task": [
-      "读 task.md 获取最新需求",
-      "重新扫描目录，更新文件列表",
-      "按 task.md 执行转换",
-      "把结果写入 task.md 的「执行结果」表格"
+
+    "on_user_says_execute": [
+      "重新扫描目录 (用户可能加了新文件)",
+      "读 task.md 获取最新勾选",
+      "检查 pandoc + browser + pdftotext + latex，哪个缺了告诉用户怎么装",
+      "按 conversion_rules 逐文件转换",
+      "drawio 文件: 保留 .drawio 源文件，调 MCP export_diagram 导出 PNG 和 SVG",
+      "图表嵌入: .md 中的 ![](xxx.drawio) 替换为 ![](xxx.png)，转 .docx/.pdf 时图片自动嵌入",
+      "写 task.md 的「执行结果」表格",
+      "按 reporting.template 输出汇报"
     ],
-    "context_loading": [
-      "扫描目录后，读取每个 .md 文件内容放入上下文",
-      "读取每个 .drawio 文件内容放入上下文（agent 可通过 MCP 渲染）",
-      "对于 .docx/.pdf，记录文件名和大小，无需全文读入"
-    ]
+
+    "context_rules": {
+      "read_all_md": true,
+      "read_all_drawio": true,
+      "docx_pdf_metadata_only": true,
+      "description": ".md 和 .drawio 文件全文读入上下文；.docx/.pdf 只记文件名和大小"
+    },
+
+    "no_task_md_behavior": {
+      "when": "task.md 未被用户修改 (仍是模板)",
+      "action": "打印文件清单 + 类型图标，说「请把要转换的文件填到 task.md 的『我的任务』里，然后说执行」"
+    },
+
+    "has_task_md_behavior": {
+      "when": "task.md 的「我的任务」区域有具体文件名和勾选",
+      "action": "直接按勾选执行转换，无需再问"
+    }
   },
 
   "conversion_rules": {
@@ -75,14 +103,22 @@
 
   "mcp_integration": {
     "drawio": {
-      "description": "当 .md 中引用 .drawio 文件或需要导出图表时",
+      "description": "检测到 .drawio 文件时，agent 必须保留源文件并导出图片嵌入文档。",
       "tools": ["export_diagram"],
+      "rules": [
+        "保留 .drawio 源文件不动 (方便以后编辑)",
+        "调用 export_diagram 导出为 .png (高分辨率) 和 .svg (矢量)",
+        "导出文件放到源文件同目录，命名为 <原名>.png 和 <原名>.svg",
+        "如果 .md 中有 ![](xxx.drawio)，替换为 ![](xxx.png)",
+        "转 .docx 和 .pdf 时，图片路径会被 pandoc 自动解析并嵌入文档",
+        "最终交付：三种格式 (.md + .docx + .pdf) 都包含图表"
+      ],
       "workflow": [
-        "扫描 .md 中 ![](xxx.drawio) 或 ```drawio 引用",
-        "对每个 .drawio，调 export_diagram 导出 PNG 和 SVG",
-        "输出到文档同目录或 ./images/",
-        "将 .md 中的引用路径改为导出的图片路径",
-        "然后正常跑 md → docx + pdf"
+        "1. 扫描找到所有 .drawio 文件",
+        "2. 对每个 .drawio 调 MCP export_diagram → PNG + SVG",
+        "3. 更新 .md 中的图片引用 (xxx.drawio → xxx.png)",
+        "4. python md2docx_pdf.py -y *.md  (转 .docx + .pdf)",
+        "5. 确认导出的 PNG/SVG 在 .docx 和 .pdf 中可见"
       ]
     }
   },
