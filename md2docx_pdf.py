@@ -35,16 +35,18 @@ REPO_URL = "https://github.com/cowhorse05/md2doc2pdf"
 
 def render_mermaid_to_png(mermaid_code: str, output_path: Path) -> bool:
     """Render Mermaid code to PNG using mermaid.ink API.
-    Uses zlib compress + base64 encode. No dependencies needed.
-    Returns True if PNG was saved successfully.
+    Uses raw base64 encode + User-Agent header (required by mermaid.ink).
+    No dependencies needed. Returns True if PNG was saved successfully.
     """
-    import base64, zlib, urllib.request
+    import base64, urllib.request
     try:
-        compressed = base64.urlsafe_b64encode(
-            zlib.compress(mermaid_code.encode('utf-8'), 9)
+        encoded = base64.urlsafe_b64encode(
+            mermaid_code.encode('utf-8')
         ).decode('ascii')
-        url = f'https://mermaid.ink/img/{compressed}'
-        urllib.request.urlretrieve(url, str(output_path))
+        url = f'https://mermaid.ink/img/{encoded}'
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            output_path.write_bytes(resp.read())
         return output_path.exists() and output_path.stat().st_size > 100
     except Exception:
         return False
@@ -777,7 +779,8 @@ def pandoc_convert(src: Path, dst: Path) -> bool:
 
 def any_to_pdf(src: Path, dst: Path, browser: str) -> bool:
     """Convert anything pandoc can read → PDF via HTML + browser."""
-    fd, html = tempfile.mkstemp(suffix='.html', prefix='md2pdf_')
+    # Create temp HTML in SAME directory as source, so relative image paths work
+    fd, html = tempfile.mkstemp(suffix='.html', prefix='md2pdf_', dir=str(src.parent))
     os.close(fd)
 
     # pandoc → HTML
@@ -1003,7 +1006,9 @@ GitHub: {REPO_URL}
     parser.add_argument('--drawio', action='store_true',
                         help='启用 drawio 图表导出 (需要 drawio MCP)')
     parser.add_argument('--render-mermaid', action='store_true',
-                        help='将 .md 中的 Mermaid 代码块渲染为 PNG 图片再转换')
+                        help='将 .md 中的 Mermaid 代码块渲染为 PNG 图片再转换 (默认自动检测)')
+    parser.add_argument('--no-render-mermaid', action='store_true',
+                        help='禁止自动渲染 Mermaid 代码块')
     parser.add_argument('--setup', action='store_true',
                         help='运行交互式设置向导，选择安装可选组件')
     parser.add_argument('--install', action='store_true',
@@ -1110,12 +1115,18 @@ GitHub: {REPO_URL}
 
         out = output_dir or Path(scan_path)
 
-        # Pre-process: render Mermaid blocks to PNG if requested
-        if args.render_mermaid:
+        # Pre-process: auto-detect Mermaid blocks → render PNG (unless --no-render-mermaid)
+        if not getattr(args, 'no_render_mermaid', False):
             for f in found.get('.md', []):
-                n = render_all_mermaid_in_md(f, out)
-                if n > 0:
-                    print(f"  已渲染 {n} 个 Mermaid 图表")
+                blocks = extract_mermaid_blocks(f)
+                if blocks:
+                    print(f"\n  检测到 {len(blocks)} 个 Mermaid 图表，自动渲染为 PNG...")
+                    n = render_all_mermaid_in_md(f, out)
+                    if n > 0:
+                        print(f"  ✓ 已渲染 {n} 个图表为 PNG")
+                elif args.render_mermaid:
+                    # Explicit flag but no blocks found
+                    pass
 
         total_ok, total_fail = 0, 0
         # Only convert documents (not drawio - that's MCP/agent territory)
@@ -1135,12 +1146,15 @@ GitHub: {REPO_URL}
                     if not p.name.startswith('~$'):
                         input_files.append(p)
 
-        # Pre-process: render Mermaid blocks to PNG if requested
-        if args.render_mermaid:
+        # Pre-process: auto-detect Mermaid blocks → render PNG (unless --no-render-mermaid)
+        if not getattr(args, 'no_render_mermaid', False):
             for f in [x for x in input_files if x.suffix == '.md']:
-                n = render_all_mermaid_in_md(f)
-                if n > 0:
-                    print(f"  已渲染 {n} 个 Mermaid 图表")
+                blocks = extract_mermaid_blocks(f)
+                if blocks:
+                    print(f"\n  检测到 {len(blocks)} 个 Mermaid 图表，自动渲染为 PNG...")
+                    n = render_all_mermaid_in_md(f)
+                    if n > 0:
+                        print(f"  ✓ 已渲染 {n} 个图表为 PNG")
 
         # If .md and user specified -f single format, respect it
         if args.format != 'both':

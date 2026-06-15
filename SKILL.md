@@ -44,7 +44,7 @@
 > C. 先不，以后再说
 
 根据用户选择：
-- 选 A → **直接用 `python md2docx_pdf.py -y --render-mermaid` 跳过所有确认，一步到位**，不要逐文件再问
+- 选 A → **直接用 `python md2docx_pdf.py -y` 跳过所有确认，Mermaid 自动渲染，一步到位**，不要逐文件再问
 - 选 B → 打印文件清单，说明怎么填 task.md，等用户说「执行」
 - 选 C → 告诉用户随时可以说「执行 task.md」或 `python md2docx_pdf.py`
 
@@ -62,25 +62,29 @@
 | 复杂架构全景、多层嵌套 | **DrawIO MCP** → export_diagram → PNG+SVG | 手动布局更精确 |
 | 手绘风格、UI草图 | **DrawIO MCP** | Mermaid 不适合 |
 
-### Step 1: Mermaid → PNG（简单图）
+### Step 1: Mermaid → PNG（自动检测，无需手动指定）
 
-使用 mermaid.ink 在线 API，无需安装任何东西：
+转换时**自动检测** .md 中的 Mermaid 代码块，通过 mermaid.ink 渲染为 PNG 并替换引用。
 
 ```bash
-# 方法一：Python 一行渲染
-python .claude/skills/md2docx-pdf/md2docx_pdf.py file.md --render-mermaid
+# 直接转换，Mermaid 块会自动渲染为 PNG
+python .claude/skills/md2docx-pdf/md2docx_pdf.py file.md -y
 
-# 方法二：手动渲染单个图
+# 如果不想自动渲染（保留 Mermaid 代码块）
+python .claude/skills/md2docx-pdf/md2docx_pdf.py file.md -y --no-render-mermaid
+```
+
+如果想手动渲染单个图：
+```bash
 python -c "
-import base64, zlib, urllib.request
-code = '''graph TB
-  A[启动] --> B[主界面]
-  B --> C[消费] 
-  B --> D[生产]'''
-encoded = base64.urlsafe_b64encode(zlib.compress(code.encode(),9)).decode()
+import base64, urllib.request
+code = 'graph TB\n  A[Start] --> B[End]'
+encoded = base64.urlsafe_b64encode(code.encode()).decode()
 url = f'https://mermaid.ink/img/{encoded}'
-urllib.request.urlretrieve(url, 'architecture.png')
-print('saved architecture.png')
+req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+with urllib.request.urlopen(req) as r:
+    open('diagram.png', 'wb').write(r.read())
+print('saved diagram.png')
 "
 ```
 
@@ -148,7 +152,8 @@ find . -type f \( -name "*.md" -o -name "*.docx" -o -name "*.doc" -o -name "*.pd
 
 ### Step 4: 执行转换（一把梭，不要逐文件问）
 ```bash
-python .claude/skills/md2docx-pdf/md2docx_pdf.py file.md -y --render-mermaid
+# Mermaid 块会自动检测并渲染为 PNG！不需要额外参数
+python .claude/skills/md2docx-pdf/md2docx_pdf.py file.md -y
 ```
 - 只转用户指定的文件，不要转 task.md 本身（除非用户明确要求）
 - 如果有新创建的 .md 文件，一并转换
