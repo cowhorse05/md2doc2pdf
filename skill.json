@@ -93,11 +93,14 @@
       "phase_2_final_choice": [
         "所有依赖查完后，必须问用户最后的选择题：",
         "「环境配好了！要不要现在就扫描当前目录，开始转换文档？」",
-        "A. 是，扫描目录并转换 → 进入 scan_and_execute",
+        "A. 是，扫描目录并转换 → 直接用 python md2docx_pdf.py -y 一把梭，不要逐文件问",
         "B. 我先填 task.md → 打印文件清单 + task.md 用法，等用户说「执行」",
         "C. 先不 → 告诉用户随时说「执行 task.md」或 python md2docx_pdf.py"
       ],
       "phase_3_scan_and_execute": [
+        "用户选 A 或说「执行」后，直接用 -y 跳过所有确认：python md2docx_pdf.py -y",
+        "有 drawio 加 --drawio: python md2docx_pdf.py -y --drawio",
+        "不要逐文件停下来问用户 — 用户说了执行就是全自动",
         "扫描当前目录及所有子目录，列出每个文件 (含大小、类型图标)",
         "读 task.md —— 判断「我的任务」区域是否有具体需求",
         "if 只有模板占位 → 打印文件清单 + 类型图标，说「请把要转换的文件填到 task.md 的『我的任务』里，勾上格式，然后说 执行」",
