@@ -77,9 +77,15 @@
     }
   },
 
+  "reporting": {
+    "description": "所有任务完成后，agent 必须输出结构化汇报。格式如下：",
+    "required_sections": ["已完成", "未完成", "遇到的问题", "输出文件清单"],
+    "template": "## 📋 转换汇报\n\n### ✅ 已完成\n- (逐条列出完成的项目)\n\n### ❌ 未完成\n- (如有，说明原因)\n\n### ⚠️ 遇到的问题\n- (如有报错/警告/跳过的文件)\n\n### 📁 输出文件\n| 源文件 | 输出 | 大小 | 状态 |\n|--------|------|------|------|\n| xxx.md | xxx.docx | 23KB | OK |\n| xxx.md | xxx.pdf | 650KB | OK |\n\n如果一切顺利没有失败，在汇报末尾加一句：**\"全部转换完成，没有失败。\"**"
+  },
+
   "usage": {
     "scan_mode": "python md2docx_pdf.py           扫描目录，交互式互转",
-    "lazy_mode": "python md2docx_pdf.py -y        跳过确认，直接全转",
+    "lazy_mode": "python md2docx_pdf.py -y        跳过询问，直接全转",
     "with_drawio": "python md2docx_pdf.py -y --drawio  含图表导出",
     "single_file": "python md2docx_pdf.py file.md"
   }
