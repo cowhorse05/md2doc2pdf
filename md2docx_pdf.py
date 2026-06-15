@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
 """
-md2docx_pdf.py --- Markdown to DOCX & PDF Converter
-====================================================
-Cross-platform CLI tool for converting Markdown files to
-professional DOCX (Word) and PDF documents with full CJK support.
+md2docx_pdf.py --- 大学生作业一站式转换工具
+============================================
+扫描目录，自动检测 .md / .docx / .pdf / .drawio，每个文件转为其余格式。
+
+.md     → .docx + .pdf    (drawio 引用自动替换为图片)
+.docx   → .md + .pdf
+.pdf    → .md + .docx     (需要 pdftotext)
+.drawio → .png + .svg     (需要 drawio MCP，agent 处理)
+
+直接跑:  python md2docx_pdf.py           扫描目录，交互式互转
+加 -y:   python md2docx_pdf.py -y        跳过询问
+加图表:  python md2docx_pdf.py -y --drawio   含图表导出
 
 GitHub: https://github.com/cowhorse05/md2doc2pdf
-Author: Li Yufeng
-Version: 1.0.0
-License: MIT
 """
 
 import argparse
@@ -20,24 +25,27 @@ import sys
 import glob
 import tempfile
 from pathlib import Path
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Dict
 
-
-# ── Config ────────────────────────────────────────────────────
-
-VERSION = "1.0.0"
+VERSION = "1.2.0"
 REPO_URL = "https://github.com/cowhorse05/md2doc2pdf"
 
+# ── Supported extensions ────────────────────────────────────────
+MD_EXTS = {'.md', '.markdown', '.txt'}
+DOC_EXTS = {'.docx', '.doc'}
+PDF_EXTS = {'.pdf'}
+DRAWIO_EXTS = {'.drawio', '.dio'}
+ALL_EXTS = MD_EXTS | DOC_EXTS | PDF_EXTS | DRAWIO_EXTS
+
+# ── CSS for PDF ───────────────────────────────────────────────
 CHINESE_CSS = """<style>
   body{font-family:"Microsoft YaHei","SimSun","PingFang SC","Noto Sans SC",sans-serif;font-size:14px;line-height:1.8;margin:40px auto;max-width:800px;color:#333}
   h1{font-size:22px;font-weight:bold;border-bottom:2px solid #3b82f6;padding-bottom:8px;margin-top:24px}
   h2{font-size:18px;color:#1f2937;border-bottom:1px solid #e5e7eb;padding-bottom:5px;margin-top:20px}
   h3{font-size:15px;color:#374151;margin-top:16px}
-  h4{font-size:14px;color:#4b5563}
   table{border-collapse:collapse;width:100%;margin:12px 0;font-size:13px}
   th,td{border:1px solid #ddd;padding:6px 10px;text-align:left}
-  th{background:#f5f5f5;font-weight:700}
-  tr:nth-child(even){background:#fafafa}
+  th{background:#f5f5f5;font-weight:700}tr:nth-child(even){background:#fafafa}
   code{background:#f4f4f4;padding:1px 5px;border-radius:3px;font-size:13px;font-family:"Consolas","Courier New",monospace}
   pre{background:#f8f8f8;border:1px solid #e5e7eb;border-radius:6px;padding:12px 16px;overflow-x:auto;font-size:13px}
   pre code{background:none;padding:0}
@@ -47,8 +55,8 @@ CHINESE_CSS = """<style>
   @media print{body{margin:0}@page{margin:2cm}}
 </style>"""
 
-# Browser search paths by platform
-BROWSER_SEARCH = {
+# ── Browser paths per platform ─────────────────────────────────
+BROWSER_SEARCH: Dict[str, List[str]] = {
     'Windows': [
         r'C:\Program Files\Google\Chrome\Application\chrome.exe',
         r'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe',
@@ -60,269 +68,242 @@ BROWSER_SEARCH = {
         '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
     ],
     'Linux': [
-        '/usr/bin/google-chrome',
-        '/usr/bin/chromium-browser',
-        '/usr/bin/chromium',
-        '/snap/bin/chromium',
+        '/usr/bin/google-chrome', '/usr/bin/chromium-browser',
+        '/usr/bin/chromium', '/snap/bin/chromium',
     ],
 }
 
-BROWSER_CMD_NAMES = [
-    'google-chrome', 'chrome', 'chromium', 'chromium-browser',
-    'msedge', 'microsoft-edge',
-]
+
+# ── Platform helpers ───────────────────────────────────────────
+
+def plat() -> str:
+    return platform.system()  # Windows / Darwin / Linux
 
 
-# ── Platform Utilities ────────────────────────────────────────
-
-def get_platform_name() -> str:
-    """Return human-readable platform name."""
-    return platform.system()  # 'Windows', 'Darwin', 'Linux'
-
-
-def get_install_instructions(tool: str) -> str:
-    """Return platform-specific install instructions for a tool."""
-    plat = get_platform_name()
-    instructions = {
-        'pandoc': {
-            'Windows': [
-                '  winget install pandoc',
-                '  # or download from: https://pandoc.org/installing.html',
-            ],
-            'Darwin': [
-                '  brew install pandoc',
-            ],
-            'Linux': [
-                '  sudo apt install pandoc        # Debian/Ubuntu',
-                '  sudo dnf install pandoc        # Fedora',
-                '  sudo pacman -S pandoc          # Arch',
-            ],
-        },
-        'browser': {
-            'Windows': [
-                '  # Install Google Chrome: https://www.google.com/chrome/',
-                '  # Or Microsoft Edge (already installed on Windows 10+)',
-            ],
-            'Darwin': [
-                '  brew install --cask google-chrome',
-                '  # Or: brew install --cask microsoft-edge',
-            ],
-            'Linux': [
-                '  sudo apt install chromium-browser   # Debian/Ubuntu',
-                '  sudo dnf install chromium           # Fedora',
-                '  # Or install google-chrome from https://www.google.com/chrome/',
-            ],
-        },
-    }
-    return '\n'.join(instructions.get(tool, {}).get(plat, ['  Please install manually']))
-
-
-# ── Dependency Detection ──────────────────────────────────────
-
-def find_browser() -> Optional[str]:
-    """Auto-detect an available Chromium-based browser."""
-    plat = get_platform_name()
-    candidates = list(BROWSER_SEARCH.get(plat, []))
-
-    # Also check PATH
-    for name in BROWSER_CMD_NAMES:
-        found = shutil.which(name)
-        if found and found not in candidates:
-            candidates.append(found)
-
-    for p in candidates:
-        if os.path.isfile(p):
-            return p
+def find_tool(name: str, extra_paths: Optional[List[str]] = None) -> Optional[str]:
+    """Find a CLI tool: check PATH first, then extra_paths."""
+    found = shutil.which(name)
+    if found:
+        return found
+    if extra_paths:
+        for p in extra_paths:
+            if os.path.isfile(p):
+                return p
     return None
 
 
-def check_pandoc() -> bool:
-    """Check if pandoc is installed and accessible."""
-    return shutil.which('pandoc') is not None
+# ── Pandoc check + install prompt ──────────────────────────────
+
+PANDOC_INSTALL = {
+    'Windows': 'winget install pandoc',
+    'Darwin': 'brew install pandoc',
+    'Linux': 'sudo apt install pandoc',
+}
 
 
-def check_dependencies(fmt: str) -> Tuple[bool, List[str]]:
-    """Check all required dependencies.
-    Returns (all_ok, error_messages).
-    """
-    errors = []
-    plat = get_platform_name()
+def ensure_pandoc() -> bool:
+    """Check pandoc. If missing, ask user before installing."""
+    if shutil.which('pandoc'):
+        v = subprocess.run(['pandoc', '--version'], capture_output=True,
+                           timeout=5).stdout.decode('utf-8', errors='replace').split('\n')[0]
+        print(f"  pandoc: {v}")
+        return True
 
-    print(f"  Platform detected: {plat}")
-
-    # Check pandoc
-    if check_pandoc():
-        pandoc_ver = subprocess.run(
-            ['pandoc', '--version'], capture_output=True, timeout=5
-        ).stdout.decode('utf-8', errors='replace').split('\n')[0]
-        print(f"  pandoc: {pandoc_ver}")
-    else:
-        errors.append(
-            "[MISSING] pandoc -- required for all conversions\n"
-            f"{get_install_instructions('pandoc')}"
-        )
-        print("  pandoc: NOT FOUND")
-
-    # Check browser (only needed for PDF)
-    if fmt in ('pdf', 'both'):
-        browser = find_browser()
-        if browser:
-            print(f"  browser: {Path(browser).name}")
-        else:
-            errors.append(
-                "[MISSING] Chromium browser (Chrome/Edge) -- required for PDF\n"
-                f"{get_install_instructions('browser')}\n"
-                "  Or set BROWSER_PATH env variable to your browser executable."
-            )
-            print("  browser: NOT FOUND")
-
-    return len(errors) == 0, errors
+    print("\n  [MISSING] pandoc 未安装")
+    print(f"  安装命令: {PANDOC_INSTALL.get(plat(), '请访问 https://pandoc.org/installing.html')}")
+    print()
+    ans = input("  是否现在安装? [y/N] ").strip().lower()
+    if ans == 'y':
+        cmd = PANDOC_INSTALL.get(plat())
+        if cmd:
+            print(f"  正在执行: {cmd}")
+            ret = os.system(cmd)
+            if ret == 0 and shutil.which('pandoc'):
+                print("  pandoc 安装成功")
+                return True
+    print("  跳过 pandoc，无法继续。请手动安装后重试。")
+    return False
 
 
-# ── Converters ────────────────────────────────────────────────
+# ── pdftotext check ────────────────────────────────────────────
 
-def md_to_docx(input_path: Path, output_path: Path) -> bool:
-    """Convert Markdown to DOCX using pandoc."""
-    cmd = [
-        'pandoc',
-        str(input_path),
-        '-o', str(output_path),
-        '--from', 'markdown+smart',
-        '--to', 'docx',
-        '--standalone',
-    ]
+PDFTOTEXT_INSTALL = {
+    'Windows': 'winget install xpdfreader.xpdf-tools    (或下载 https://www.xpdfreader.com)',
+    'Darwin': 'brew install poppler',
+    'Linux': 'sudo apt install poppler-utils',
+}
+
+
+def has_pdftotext() -> bool:
+    return shutil.which('pdftotext') is not None
+
+
+# ── Conversion Engine ──────────────────────────────────────────
+
+def pandoc_convert(src: Path, dst: Path) -> bool:
+    """Use pandoc to convert between supported formats."""
+    cmd = ['pandoc', str(src), '-o', str(dst), '--standalone']
     try:
-        result = subprocess.run(cmd, capture_output=True, timeout=60)
-        if output_path.exists() and output_path.stat().st_size > 100:
-            return True
-        return False
-    except Exception as e:
-        print(f"  Exception: {e}")
+        subprocess.run(cmd, capture_output=True, timeout=120)
+        return dst.exists() and dst.stat().st_size > 50
+    except Exception:
         return False
 
 
-def md_to_pdf(input_path: Path, output_path: Path,
-              browser_path: str) -> bool:
-    """Convert Markdown to PDF via HTML + headless browser."""
-    fd, html_path = tempfile.mkstemp(suffix='.html', prefix='md2pdf_')
+def any_to_pdf(src: Path, dst: Path, browser: str) -> bool:
+    """Convert anything pandoc can read → PDF via HTML + browser."""
+    fd, html = tempfile.mkstemp(suffix='.html', prefix='md2pdf_')
     os.close(fd)
 
-    # Step 1: MD -> HTML
-    cmd_html = [
-        'pandoc',
-        str(input_path),
-        '-o', html_path,
-        '--from', 'markdown+smart',
-        '--to', 'html5',
-        '--standalone',
-        '--metadata', 'title=',
-    ]
-    try:
-        result = subprocess.run(cmd_html, capture_output=True, timeout=30)
-        if result.returncode != 0:
-            print(f"  HTML conversion failed")
-            try:
-                os.unlink(html_path)
-            except OSError:
-                pass
-            return False
-    except Exception as e:
-        print(f"  HTML conversion exception: {e}")
-        try:
-            os.unlink(html_path)
-        except OSError:
-            pass
+    # pandoc → HTML
+    ok = pandoc_convert(src, Path(html))
+    if not ok:
+        try: os.unlink(html)
+        except OSError: pass
         return False
 
-    # Step 2: Inject CSS
+    # Inject CSS
     try:
-        with open(html_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-        content = content.replace(
-            '<head>', f'<head><meta charset="UTF-8">{CHINESE_CSS}')
-        with open(html_path, 'w', encoding='utf-8') as f:
-            f.write(content)
-    except Exception as e:
-        print(f"  CSS injection failed: {e}")
-        try:
-            os.unlink(html_path)
-        except OSError:
-            pass
+        with open(html, 'r', encoding='utf-8') as f:
+            c = f.read()
+        c = c.replace('<head>', f'<head><meta charset="UTF-8">{CHINESE_CSS}')
+        with open(html, 'w', encoding='utf-8') as f:
+            f.write(c)
+    except Exception:
+        try: os.unlink(html)
+        except OSError: pass
         return False
 
-    # Step 3: HTML -> PDF
-    html_url = 'file:///' + html_path.replace('\\', '/')
-    cmd_pdf = [
-        browser_path,
-        '--headless',
-        '--disable-gpu',
-        '--no-sandbox',
-        f'--print-to-pdf={output_path}',
-        '--no-pdf-header-footer',
-        '--no-margins',
-        '--virtual-time-budget=15000',
-        html_url,
-    ]
+    # Browser → PDF
+    url = 'file:///' + html.replace('\\', '/')
+    subprocess.run([browser, '--headless', '--disable-gpu', '--no-sandbox',
+                    f'--print-to-pdf={dst}',
+                    '--no-pdf-header-footer', '--no-margins',
+                    '--virtual-time-budget=15000', url],
+                   capture_output=True, timeout=60)
+    try: os.unlink(html)
+    except OSError: pass
+    return dst.exists() and dst.stat().st_size > 500
+
+
+def pdf_to_text(src: Path, dst: Path) -> bool:
+    """Extract text from PDF using pdftotext → save as markdown."""
+    # Try pdftotext with layout preservation
     try:
-        subprocess.run(cmd_pdf, capture_output=True, timeout=45)
-    except subprocess.TimeoutExpired:
-        print(f"  Browser timed out after 45s")
-    except Exception as e:
-        print(f"  Browser exception: {e}")
-    finally:
-        try:
-            os.unlink(html_path)
-        except OSError:
-            pass
+        subprocess.run(['pdftotext', '-layout', '-nopgbrk',
+                        str(src), str(dst)],
+                       capture_output=True, timeout=60)
+        if dst.exists() and dst.stat().st_size > 20:
+            # Wrap in markdown frontmatter
+            with open(dst, 'r', encoding='utf-8') as f:
+                content = f.read()
+            with open(dst, 'w', encoding='utf-8') as f:
+                f.write(f"# {src.stem}\n\n> 由 PDF 自动提取，格式可能有损。\n\n{content}")
+            return True
+    except Exception:
+        pass
+    return False
 
-    return output_path.exists() and output_path.stat().st_size > 500
 
+# ── Smart convert: one file → other two formats ────────────────
 
-# ── Conversion Engine ─────────────────────────────────────────
-
-def convert_file(input_path: Path, fmt: str, output_dir: Optional[Path],
-                 browser_path: Optional[str]) -> Tuple[int, int]:
-    """Convert one file. Returns (ok, fail) counts."""
-    if output_dir is None:
-        output_dir = input_path.parent
-
-    base_name = input_path.stem
+def convert_file(src: Path, browser: str, output_dir: Path) -> Tuple[int, int]:
+    """
+    Convert one file to the other two formats.
+    Returns (ok, fail).
+    """
+    suffix = src.suffix.lower()
+    base = output_dir / src.stem
     ok, fail = 0, 0
-    size = input_path.stat().st_size
+    size = src.stat().st_size
+    label = {'.md': 'MD', '.docx': 'DOCX', '.doc': 'DOC', '.pdf': 'PDF'}.get(suffix, suffix)
 
-    print(f"\n[FILE] {input_path.name} ({size:,} bytes)")
+    print(f"\n[{label}] {src.name} ({size:,} bytes)")
 
-    if fmt in ('docx', 'both'):
-        docx_path = output_dir / f'{base_name}.docx'
-        print(f"  -> DOCX: {docx_path.name} ... ", end='', flush=True)
-        if md_to_docx(input_path, docx_path):
-            out_size = docx_path.stat().st_size
-            print(f"[OK] ({out_size:,} bytes)")
-            ok += 1
+    if suffix == '.md':
+        # MD → DOCX + PDF
+        d_docx = Path(str(base) + '.docx')
+        d_pdf = Path(str(base) + '.pdf')
+        print(f"  -> DOCX: {d_docx.name} ... ", end='', flush=True)
+        if pandoc_convert(src, d_docx):
+            print(f"OK ({d_docx.stat().st_size:,} bytes)"); ok += 1
         else:
-            print("[FAIL]")
-            fail += 1
+            print("FAIL"); fail += 1
 
-    if fmt in ('pdf', 'both'):
-        pdf_path = output_dir / f'{base_name}.pdf'
-        print(f"  -> PDF:  {pdf_path.name} ... ", end='', flush=True)
-        if browser_path is None:
-            print("[SKIP] (no browser)")
-        elif md_to_pdf(input_path, pdf_path, browser_path):
-            out_size = pdf_path.stat().st_size
-            print(f"[OK] ({out_size:,} bytes)")
-            ok += 1
+        print(f"  -> PDF:  {d_pdf.name} ... ", end='', flush=True)
+        if browser and any_to_pdf(src, d_pdf, browser):
+            print(f"OK ({d_pdf.stat().st_size:,} bytes)"); ok += 1
+        elif not browser:
+            print("SKIP (no browser)"); fail += 1
         else:
-            print("[FAIL]")
-            fail += 1
+            print("FAIL"); fail += 1
+
+    elif suffix in ('.docx', '.doc'):
+        # DOCX → MD + PDF
+        d_md = Path(str(base) + '.md')
+        d_pdf = Path(str(base) + '.pdf')
+        print(f"  -> MD:   {d_md.name} ... ", end='', flush=True)
+        if pandoc_convert(src, d_md):
+            print(f"OK ({d_md.stat().st_size:,} bytes)"); ok += 1
+        else:
+            print("FAIL"); fail += 1
+
+        print(f"  -> PDF:  {d_pdf.name} ... ", end='', flush=True)
+        if browser and any_to_pdf(src, d_pdf, browser):
+            print(f"OK ({d_pdf.stat().st_size:,} bytes)"); ok += 1
+        elif not browser:
+            print("SKIP (no browser)"); fail += 1
+        else:
+            print("FAIL"); fail += 1
+
+    elif suffix == '.pdf':
+        # PDF → MD + DOCX (need pdftotext)
+        d_md = Path(str(base) + '.md')
+        d_docx = Path(str(base) + '_from_pdf.docx')
+
+        if has_pdftotext():
+            print(f"  -> MD:   {d_md.name} ... ", end='', flush=True)
+            if pdf_to_text(src, d_md):
+                print(f"OK ({d_md.stat().st_size:,} bytes)"); ok += 1
+                # Now MD → DOCX
+                print(f"  -> DOCX: {d_docx.name} ... ", end='', flush=True)
+                if pandoc_convert(d_md, d_docx):
+                    print(f"OK ({d_docx.stat().st_size:,} bytes)"); ok += 1
+                else:
+                    print("FAIL"); fail += 1
+            else:
+                print("FAIL"); fail += 1
+        else:
+            print(f"  -> MD/DOCX: SKIP (需要 pdftotext，未安装)")
+            print(f"    安装: {PDFTOTEXT_INSTALL.get(plat(), '请搜索 poppler-utils')}")
+            fail += 2
 
     return ok, fail
 
 
-# ── Main ──────────────────────────────────────────────────────
+# ── Scan directory for documents ───────────────────────────────
+
+def scan_dir(directory: str) -> Dict[str, List[Path]]:
+    """Find all documents (.md/.docx/.pdf) and diagrams (.drawio) in directory."""
+    found: Dict[str, List[Path]] = {
+        '.md': [], '.docx': [], '.doc': [], '.pdf': [],
+        '.drawio': [], '.dio': [],
+    }
+    patterns = ['*.md', '*.docx', '*.doc', '*.pdf', '*.drawio', '*.dio']
+    for pat in patterns:
+        for f in glob.glob(os.path.join(directory, pat)):
+            p = Path(f).resolve()
+            if p.name.startswith('~$'):
+                continue
+            ext = p.suffix.lower()
+            if ext in found:
+                found[ext].append(p)
+    return found
+
+
+# ── Main ───────────────────────────────────────────────────────
 
 def main():
-    # Fix encoding on Windows
     if sys.platform == 'win32':
         try:
             sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -330,102 +311,168 @@ def main():
             pass
 
     parser = argparse.ArgumentParser(
-        description='Convert Markdown to professional DOCX/PDF with CJK support',
+        description='文档互转：.md / .docx / .pdf 互相转换。不传文件则扫描当前目录。',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=f"""
-Examples:
-  %(prog)s report.md                  # DOCX only (default)
-  %(prog)s report.md -f both          # DOCX + PDF
-  %(prog)s *.md -f pdf                # Batch convert to PDF
-  %(prog)s report.md -f both -o ./out # Custom output directory
+示例:
+  %(prog)s                  扫描当前目录，列出所有文档，询问后转换
+  %(prog)s report.md        单文件 → 其余两种格式
+  %(prog)s -f both *.md     批量转换
+  %(prog)s --scan ./docs    扫描指定目录
 
 GitHub: {REPO_URL}
         """
     )
-    parser.add_argument('inputs', nargs='+',
-                        help='Markdown file(s) or glob patterns')
-    parser.add_argument('-f', '--format', default='docx',
+    parser.add_argument('inputs', nargs='*',
+                        help='要转换的文件，支持通配符。不传则扫描目录。')
+    parser.add_argument('-f', '--format', default='both',
                         choices=['docx', 'pdf', 'both'],
-                        help='Output format (default: docx)')
-    parser.add_argument('-o', '--output', metavar='DIR',
-                        help='Output directory')
+                        help='输出格式 (仅对 .md 有效；其他格式固定转两种)')
+    parser.add_argument('-o', '--output', metavar='DIR', help='输出目录')
+    parser.add_argument('-s', '--scan', metavar='DIR', nargs='?', const='.',
+                        help='扫描目录中的文档 (默认: 当前目录)')
+    parser.add_argument('-y', '--yes', action='store_true',
+                        help='跳过确认，直接全部转换')
+    parser.add_argument('--drawio', action='store_true',
+                        help='启用 drawio 图表导出 (需要 drawio MCP)')
     parser.add_argument('--version', action='version',
                         version=f'md2docx_pdf v{VERSION}')
 
     args = parser.parse_args()
 
-    # ── Header ────────────────────────────────────────────
-    print(f"""\n{'='*50}
-  md2docx_pdf v{VERSION}   {REPO_URL}
-  Markdown -> DOCX / PDF Converter
-{'='*50}\n""")
+    print(f"\n  md2docx_pdf v{VERSION}  {REPO_URL}")
+    print(f"  平台: {plat()}")
 
-    # ── Dependency check ──────────────────────────────────
-    print("[CHECK] Verifying dependencies...")
-    all_ok, errors = check_dependencies(args.format)
-
-    if errors:
-        print(f"\n{'='*50}")
-        print("  DEPENDENCY ISSUES DETECTED")
-        print(f"{'='*50}")
-        for e in errors:
-            print(f"\n{e}")
-        print(f"\n{'='*50}")
-        print(f"  GitHub: {REPO_URL}")
-        print(f"{'='*50}")
+    # Check pandoc
+    if not ensure_pandoc():
         sys.exit(1)
 
-    print("[OK] All dependencies satisfied\n")
+    # Find browser
+    browser = None
+    for name in ['google-chrome', 'chrome', 'chromium', 'msedge']:
+        browser = find_tool(name, BROWSER_SEARCH.get(plat(), []))
+        if browser:
+            break
+    if browser:
+        print(f"  浏览器: {Path(browser).name}")
+    else:
+        print("  浏览器: 未检测到 (PDF 输出将跳过)")
 
-    # ── Resolve input files ───────────────────────────────
-    input_files: List[Path] = []
-    for pattern in args.inputs:
-        matches = glob.glob(pattern, recursive=True)
-        if matches:
-            for m in matches:
-                p = Path(m).resolve()
-                if p.suffix.lower() in ('.md', '.markdown', '.txt'):
-                    input_files.append(p)
-        else:
-            p = Path(pattern).resolve()
-            if p.exists():
-                input_files.append(p)
-            else:
-                print(f"[WARN] Not found: {pattern}")
-
-    if not input_files:
-        print("\n[ERROR] No .md files found!")
-        sys.exit(1)
-
-    # De-duplicate
-    seen = set()
-    unique = []
-    for f in input_files:
-        if f not in seen:
-            seen.add(f)
-            unique.append(f)
-
-    print(f"  Files to convert: {len(unique)}")
-    print(f"  Format: {args.format}")
-    print(f"  Output: {args.output or '(same as input)'}")
-
-    # ── Convert ───────────────────────────────────────────
+    # ── Determine what to convert ──────────────────────────
     output_dir = Path(args.output).resolve() if args.output else None
-    browser = find_browser()
-    total_ok, total_fail = 0, 0
 
-    for f in unique:
-        ok, fail = convert_file(f, args.format, output_dir, browser)
-        total_ok += ok
-        total_fail += fail
+    # Scan mode: no inputs given, or --scan specified
+    if args.scan or not args.inputs:
+        scan_path = args.scan if args.scan else '.'
+        scan_path = os.path.abspath(scan_path)
+        print(f"\n  扫描目录: {scan_path}")
+        found = scan_dir(scan_path)
+
+        # Count files
+        total = sum(len(v) for v in found.values())
+        if total == 0:
+            print("\n  未找到 .md / .docx / .pdf 文件。")
+            sys.exit(0)
+
+        drawio_files = found.get('.drawio', []) + found.get('.dio', [])
+        doc_total = total - len(drawio_files)
+
+        print(f"\n  找到 {doc_total} 个文档, {len(drawio_files)} 个图表:")
+        LABELS = {'.md': 'Markdown', '.docx': 'Word', '.doc': 'Word(旧)',
+                  '.pdf': 'PDF', '.drawio': 'DrawIO', '.dio': 'DrawIO'}
+        for ext in ['.md', '.docx', '.doc', '.pdf', '.drawio', '.dio']:
+            files = found.get(ext, [])
+            if files:
+                label = LABELS.get(ext, ext)
+                icon = '📊' if ext in ('.drawio', '.dio') else '📄'
+                print(f"    {icon} {label} ({ext}): {len(files)} 个")
+                for f in files:
+                    print(f"      {f.name}")
+
+        # Report drawio files
+        if drawio_files:
+            print(f"\n  [DRAWIO] 发现 {len(drawio_files)} 个图表文件")
+            for f in drawio_files:
+                print(f"    {f.name}")
+            if not args.drawio:
+                print("  提示: 加 --drawio 参数可自动导出为图片 (需 drawio MCP)")
+                print("  或让 agent 处理: agent 调用 drawio MCP 导出 .png/.svg")
+
+        # Ask user
+        if not args.yes:
+            print()
+            prompt = "  全部文档互转?"
+            if drawio_files:
+                prompt += " (图表需 --drawio 或 agent 处理)"
+            ans = input(f"{prompt} [Y/n] ").strip().lower()
+            if ans and ans != 'y':
+                print("  已取消。")
+                sys.exit(0)
+
+        out = output_dir or Path(scan_path)
+        total_ok, total_fail = 0, 0
+        # Only convert documents (not drawio - that's MCP/agent territory)
+        for ext in ['.md', '.docx', '.doc', '.pdf']:
+            for f in found.get(ext, []):
+                ok, fail = convert_file(f, browser, out)
+                total_ok += ok
+                total_fail += fail
+
+    else:
+        # Direct mode: convert given files
+        input_files = []
+        for pattern in args.inputs:
+            for m in glob.glob(pattern, recursive=True):
+                p = Path(m).resolve()
+                if p.suffix.lower() in ('.md', '.docx', '.doc', '.pdf'):
+                    if not p.name.startswith('~$'):
+                        input_files.append(p)
+
+        # If .md and user specified -f single format, respect it
+        if args.format != 'both':
+            # Standard single-format mode for .md
+            input_files_md = [f for f in input_files if f.suffix == '.md']
+            input_files_other = [f for f in input_files if f.suffix != '.md']
+
+            total_ok, total_fail = 0, 0
+            if input_files_other:
+                print(f"  (非 .md 文件忽略 -f 参数，固定转为两种格式)")
+
+            for f in input_files_md:
+                out = output_dir or f.parent
+                base = out / f.stem
+                if args.format in ('docx', 'both'):
+                    d = Path(str(base) + '.docx')
+                    print(f"\n[MD] {f.name} -> DOCX ... ", end='', flush=True)
+                    if pandoc_convert(f, d):
+                        print(f"OK ({d.stat().st_size:,} bytes)"); total_ok += 1
+                    else:
+                        print("FAIL"); total_fail += 1
+                if args.format in ('pdf', 'both'):
+                    d = Path(str(base) + '.pdf')
+                    print(f"[MD] {f.name} -> PDF ... ", end='', flush=True)
+                    if browser and any_to_pdf(f, d, browser):
+                        print(f"OK ({d.stat().st_size:,} bytes)"); total_ok += 1
+                    else:
+                        print("SKIP" if not browser else "FAIL")
+                        total_fail += 1
+            for f in input_files_other:
+                ok, fail = convert_file(f, browser, output_dir or f.parent)
+                total_ok += ok
+                total_fail += fail
+        else:
+            total_ok, total_fail = 0, 0
+            for f in input_files:
+                ok, fail = convert_file(f, browser, output_dir or f.parent)
+                total_ok += ok
+                total_fail += fail
 
     # ── Summary ───────────────────────────────────────────
-    print(f"""\n{'='*50}
-  [OK] {total_ok} succeeded   [FAIL] {total_fail} failed   [TOTAL] {len(unique)} file(s)
-{'='*50}""")
-    if output_dir:
-        print(f"  Output: {output_dir}")
-
+    print(f"\n{'='*50}")
+    print(f"  OK {total_ok}   FAIL {total_fail}")
+    if total_fail == 0:
+        print("  全部转换完成!")
+    print(f"{'='*50}")
     sys.exit(0 if total_fail == 0 else 1)
 
 

@@ -1,8 +1,9 @@
 {
   "name": "md2docx-pdf",
-  "version": "1.0.0",
-  "description": "Convert .md files to .docx and/or .pdf. Cross-platform. Auto-detects pandoc and Chrome/Edge, prints install commands if missing.",
+  "version": "1.2.0",
+  "description": "大学生作业一站式转换：.md ↔ .docx ↔ .pdf 三向互转 + draw.io 图表自动导出。扫描目录，自动检测文档和图表，每个文件转为其余格式，图表导出为图片嵌入文档。",
   "entry": "md2docx_pdf.py",
+  "test": "test_converter.py",
   "repository": "https://github.com/cowhorse05/md2doc2pdf",
   "license": "MIT",
   "python": ">=3.7",
@@ -11,45 +12,69 @@
     "clone": "git clone https://github.com/cowhorse05/md2doc2pdf.git",
     "steps": [
       {
-        "desc": "Check Python version",
-        "check": "python --version 2>&1 | grep -oP '\\d+\\.\\d+' | head -1",
-        "min_version": "3.7"
+        "desc": "检查 Python 版本",
+        "check": "python --version"
       },
       {
-        "desc": "Check/install pandoc",
+        "desc": "检查 pandoc，缺失则询问用户安装",
         "check": "pandoc --version",
         "install_windows": "winget install pandoc",
         "install_macos": "brew install pandoc",
         "install_linux": "sudo apt install pandoc",
-        "note": "If winget/brew/apt not available, direct user to https://pandoc.org/installing.html"
+        "ask_user": true
       },
       {
-        "desc": "Check browser for PDF (optional, skip if only need DOCX)",
-        "check": "which google-chrome || which chromium-browser || which microsoft-edge || ls '/c/Program Files/Google/Chrome/Application/chrome.exe' || ls '/Applications/Google Chrome.app'",
-        "note": "If none found and PDF is needed, suggest installing Chrome or setting BROWSER_PATH"
+        "desc": "检查 pdftotext (PDF→文本，poppler-utils，可选)",
+        "check": "pdftotext -v 2>&1 || echo 'not found'",
+        "install_windows": "winget install xpdfreader.xpdf-tools",
+        "install_macos": "brew install poppler",
+        "install_linux": "sudo apt install poppler-utils",
+        "optional": true
+      },
+      {
+        "desc": "检查 drawio MCP (图表导出，可选)",
+        "check": "检查 drawio MCP server 是否已配置",
+        "configure": "在 Claude Code 中添加 drawio MCP: npx @anthropic/mcp-drawio",
+        "optional": true
       }
     ],
-    "verify": "python md2docx_pdf.py --version"
+    "verify": "python test_converter.py && python md2docx_pdf.py --version"
   },
 
   "usage": {
-    "command": "python md2docx_pdf.py <inputs> [-f FORMAT] [-o DIR]",
-    "arguments": {
-      "inputs": ".md file paths or glob patterns like *.md",
-      "-f": "docx | pdf | both  (default: docx)",
-      "-o": "output directory  (default: same dir as input)"
+    "scan_mode": "不传参数 → 扫描目录，列出 .md/.docx/.pdf/.drawio，询问后转换+导出",
+    "direct_mode": "传文件路径 → 直接转换",
+    "conversion_rules": {
+      ".md": "→ .docx + .pdf (其中的 drawio 引用自动替换为图片)",
+      ".docx": "→ .md + .pdf",
+      ".doc": "→ .md + .pdf",
+      ".pdf": "→ .md + .docx (需要 pdftotext)",
+      ".drawio": "→ .png + .svg (需要 drawio MCP)"
+    },
+    "flags": {
+      "-s DIR": "扫描指定目录",
+      "-y": "跳过确认，直接全转",
+      "-o DIR": "输出目录",
+      "--drawio": "启用 drawio 图表导出 (需 MCP)"
     },
     "examples": [
-      "python md2docx_pdf.py report.md",
-      "python md2docx_pdf.py report.md -f pdf",
-      "python md2docx_pdf.py report.md -f both",
-      "python md2docx_pdf.py *.md -f both",
-      "python md2docx_pdf.py report.md -f both -o ./output"
+      "python md2docx_pdf.py                    # 扫描目录，交互式互转",
+      "python md2docx_pdf.py -y --drawio        # 全转+图表导出，不询问",
+      "python md2docx_pdf.py -s ./作业           # 扫描指定目录",
+      "python md2docx_pdf.py 实验报告.md -y      # 单文件转换"
     ]
   },
 
-  "pipeline": {
-    "docx": ".md -> pandoc -> .docx",
-    "pdf": ".md -> pandoc -> html5 -> inject CJK CSS -> headless browser -> .pdf"
+  "drawio_integration": {
+    "description": "当 Markdown 中引用了 .drawio 文件时，agent 使用 drawio MCP 将其导出为 PNG/SVG，替换文档中的引用路径。",
+    "agent_workflow": [
+      "1. 扫描 .md 文件，搜索 drawio 引用 (如 ![](diagram.drawio) 或 ```drawio ... ```)",
+      "2. 对每个 .drawio 文件，调用 drawio MCP 导出为 PNG 和 SVG",
+      "3. 将导出的图片放到输出目录",
+      "4. 修改 .md 中的引用路径指向导出的图片",
+      "5. 然后正常转换 .md → .docx + .pdf"
+    ],
+    "mcp_server": "drawio",
+    "mcp_tools": ["export_diagram", "create_diagram", "edit_diagram"]
   }
 }
