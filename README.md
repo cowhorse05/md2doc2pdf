@@ -12,6 +12,9 @@
 git clone https://github.com/cowhorse05/md2doc2pdf.git
 cd md2doc2pdf
 
+# 首次使用：交互式设置向导（选择安装可选组件）
+python md2docx_pdf.py --setup
+
 # 扫描当前目录，列出所有文档，询问后转换
 python md2docx_pdf.py
 
@@ -33,15 +36,28 @@ python md2docx_pdf.py -y *.md      # 批量 .md → .docx + .pdf
 python md2docx_pdf.py 报告.md -f pdf
 ```
 
-### 懒人做法（让 AI 帮你搞定）
+### 懒人做法（AI 一句话搞定）
 
-把下面这句话发给任意一个 AI 工具，它自己会 clone、装依赖、扫描你的文件夹、完成转换：
+把下面这句话发给 Claude Code（或任意 AI 工具），它会自动 clone、逐项问你装不装可选依赖、然后扫描文件夹完成转换：
 
-**Claude Code / DeepSeek / GPT 通用：**
+> 帮我安装 https://github.com/cowhorse05/md2doc2pdf 这个 skill
 
-> 帮我安装 https://github.com/cowhorse05/md2doc2pdf 这个 skill，然后把我文件夹里的文档全部转换。先检查 pandoc 有没有装，没装帮我装一下。
+**AI 会这样一步步来：**
 
-**或者更短（用 task.md）：**
+```
+① git clone 仓库
+② 检查 Python ✓
+③ pandoc 没装? → 问你要不要装 [Y/n]
+④ pdftotext 没装? → 说明用途，问你要不要装 [y/N]
+⑤ LaTeX 没装? → 说明用途 + 警告体积(数百MB~4GB)，问你要不要装 [y/N]
+⑥ 浏览器检测 → 没找到就让你手动指定路径或跳过
+⑦ 【最后选项】"环境配好了，要不要扫描目录开始转换?"
+    → 选 A: 扫描目录，读 task.md，执行转换，输出汇报
+    → 选 B: 你先填 task.md，待会说「执行」
+    → 选 C: 先不，以后再说
+```
+
+**或者直接说：**
 
 > 执行 task.md
 
@@ -53,6 +69,17 @@ clone 下来的仓库带了一个 `task.md` 模板，把你的文件名列进去
 4. 把结果写回 `task.md`
 
 图表多的作业加一句 "drawio 也导出" 就行。
+
+### 更新 skill
+
+```bash
+# 检查并更新到最新版本
+python md2docx_pdf.py --update
+```
+
+或者对你的 AI 说：
+
+> 检查 md2docx-pdf 有没有新版本
 
 ---
 
@@ -67,9 +94,50 @@ clone 下来的仓库带了一个 `task.md` 模板，把你的文件名列进去
 
 ---
 
+## 设置向导（首次使用必看）
+
+首次安装后，运行交互式设置向导，**逐项选择**你要装哪些组件：
+
+```bash
+python md2docx_pdf.py --setup
+```
+
+向导会逐项检查并询问：
+
+```
+=== md2docx_pdf 设置向导 ===
+
+[1/5] Python 环境
+Python 3.9.0  ✓
+
+[2/5] pandoc (必装，所有格式转换都需要)
+pandoc 3.1  ✓
+
+[3/5] pdftotext (可选，PDF → 文字提取)
+用途: 把 PDF 转回 .md / .docx
+[未安装] 是否安装? [y/N]
+
+[4/5] LaTeX (可选，.tex → PDF 编译)
+用途: 编译 .tex 文件为 PDF
+⚠ 注意: 安装包较大 (数百MB ~ 4GB)
+[未安装] 是否安装? [y/N]
+
+[5/5] 浏览器 (PDF 输出需要)
+Chrome ✓
+```
+
+- **pandoc** → 必装，缺失会强制询问
+- **pdftotext** → 可选，需要 PDF 转文字再装
+- **LaTeX** → 可选，需要编译 .tex 再装（包很大，考虑清楚）
+- **浏览器** → 可选，Windows 自带 Edge 通常自动检测到
+
+跳过的组件以后随时可以补装：`python md2docx_pdf.py --setup`
+
+---
+
 ## 依赖安装
 
-首次运行自动检测，缺 pandoc 会询问"是否现在安装"。
+首次运行自动检测，缺 pandoc 会询问"是否现在安装"。推荐先跑 `--setup` 一次性搞定。
 
 ### pandoc（必装，三种格式都需要）
 
@@ -102,11 +170,14 @@ Windows 自带 Edge，macOS 和 Linux 装 Chrome 即可。
 传文件:   直接转换
 
 选项:
-  -s DIR         扫描指定目录
-  -y             跳过确认，直接全转
-  -f docx|pdf    仅 .md 有效，限制输出格式
-  -o DIR         输出目录，默认同源文件
-  --version      看版本
+  --setup, --install  交互式设置向导，选择安装可选组件
+  --update, --upgrade 检查 GitHub 仓库是否有新版本并更新
+  -s DIR              扫描指定目录
+  -y                  跳过确认，直接全转
+  -f docx|pdf         仅 .md 有效，限制输出格式
+  -o DIR              输出目录，默认同源文件
+  --drawio            启用 drawio 图表导出 (需要 drawio MCP)
+  --version           看版本
 ```
 
 ---

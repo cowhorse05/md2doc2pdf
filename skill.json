@@ -1,95 +1,148 @@
 {
   "name": "md2docx-pdf",
-  "version": "1.3.0",
-  "description": "大学生作业一站式转换：扫描目录，读 task.md，.md/.docx/.pdf/.tex 互转 + drawio 图表导出。LaTeX 为可选项。",
+  "version": "1.5.0",
+  "description": "大学生作业一站式转换：扫描目录，读 task.md，.md/.docx/.pdf/.tex 互转 + drawio 图表导出。安装时逐项可选，最后问'要不要开始干活'。",
   "entry": "md2docx_pdf.py",
   "test": "test_converter.py",
   "task_file": "task.md",
+  "agent_manual": "SKILL.md",
   "repository": "https://github.com/cowhorse05/md2doc2pdf",
   "license": "MIT",
   "python": ">=3.7",
 
   "install": {
     "clone": "git clone https://github.com/cowhorse05/md2doc2pdf.git",
-    "steps": [
-      {"desc": "检查 Python", "check": "python --version"},
+    "setup_wizard": "python md2docx_pdf.py --setup",
+    "description": "首次安装后运行 --setup 进入交互式向导，逐项检查依赖并提供可选安装。最后一步问用户是否扫描目录开始转换。",
+
+    "choices": [
       {
-        "desc": "检查 pandoc，缺失则询问用户安装",
+        "step": 1,
+        "title": "Python 环境",
+        "check": "python --version",
+        "required": true
+      },
+      {
+        "step": 2,
+        "title": "pandoc — 必装，所有格式转换的引擎",
         "check": "pandoc --version",
         "install_windows": "winget install pandoc",
         "install_macos": "brew install pandoc",
         "install_linux": "sudo apt install pandoc",
-        "ask_user": true
+        "required": true,
+        "ask_user": true,
+        "prompt": "pandoc 没装，所有格式转换都需要它。是否现在安装？[Y/n]"
       },
       {
-        "desc": "检查 pdftotext (PDF→文本)",
-        "check": "pdftotext -v 2>&1 || echo 'not found'",
+        "step": 3,
+        "title": "pdftotext — 可选，把 PDF 转回文字",
+        "usage": "提取 PDF 内容转为 .md/.docx",
+        "check": "pdftotext -v",
         "install_windows": "winget install xpdfreader.xpdf-tools",
         "install_macos": "brew install poppler",
         "install_linux": "sudo apt install poppler-utils",
-        "optional": true
+        "required": false,
+        "ask_user": true,
+        "prompt": "pdftotext 可以把 PDF 转回可编辑的文档。是否安装？[y/N]"
       },
       {
-        "desc": "检查 LaTeX (xelatex/pdflatex，编译 .tex，可选)",
-        "check": "xelatex --version 2>&1 || pdflatex --version 2>&1 || echo 'not found'",
+        "step": 4,
+        "title": "LaTeX — 可选，编译 .tex 为 PDF",
+        "usage": "编译 LaTeX 论文/作业为 PDF",
+        "check": "xelatex --version || pdflatex --version",
         "install_windows": "winget install MiKTeX.MiKTeX",
-        "install_macos": "brew install --cask basictex   (完整版: brew install --cask mactex ~4GB)",
+        "install_macos": "brew install --cask basictex",
         "install_linux": "sudo apt install texlive-xetex texlive-latex-extra texlive-lang-chinese",
-        "optional": true,
-        "note": "LaTeX 安装包较大 (数百MB~4GB)，仅 .tex 文件编译需要"
+        "required": false,
+        "ask_user": true,
+        "prompt": "LaTeX 可以把 .tex 编译成 PDF。注意安装包较大(数百MB~4GB)。是否安装？[y/N]",
+        "note": "MiKTeX/mactex 体积大，仅 .tex 文件编译时需要"
+      },
+      {
+        "step": 5,
+        "title": "浏览器 — 可选，HTML→PDF 渲染",
+        "usage": "把文档渲染为排版精美的 PDF",
+        "check": "chrome --version || msedge --version",
+        "required": false,
+        "ask_user": true,
+        "prompt": "PDF 输出需要浏览器渲染引擎。没检测到 Chrome/Edge，要手动指定路径吗？",
+        "note": "Windows 自带 Edge 通常自动检测到"
+      },
+      {
+        "step": 6,
+        "title": "【最后选项】是否现在扫描目录并完成任务？",
+        "required": true,
+        "ask_user": true,
+        "prompt": "环境配好了！要不要现在就扫描当前目录，开始转换文档？",
+        "options": [
+          {"label": "是，扫描目录并转换", "action": "scan_and_execute"},
+          {"label": "我先填 task.md，待会说「执行」", "action": "show_file_list_and_wait"},
+          {"label": "先不，以后再说", "action": "show_how_to_continue"}
+        ]
       }
-    ],
-    "verify": "python test_converter.py"
+    ]
   },
 
   "agent_workflow": {
-    "complete_flow": [
-      "1. 克隆仓库后，扫描工作目录及所有子目录，列出每个文件 (含大小、类型)",
-      "2. 读取 task.md —— 判断用户是否已在「我的任务」里写了具体需求",
-      "3. 如果 task.md 只有模板占位文字 → 打印文件清单，请用户填 task.md 再执行",
-      "4. 如果 task.md 有具体内容 → 按用户勾选的要求执行",
-      "5. 检查依赖：pandoc(必装) Chrome/Edge(PDF) pdftotext(PDF→文字) LaTeX(.tex，可选)",
-      "6. 逐文件转换，按 conversion_rules 的规则",
-      "7. 遇到 .drawio：保留源文件 → MCP 导出 PNG+SVG → 替换 .md 引用 → 转换时图随文档",
-      "8. 按 reporting.template 输出结构化汇报"
-    ],
-
-    "on_install": [
-      "git clone https://github.com/cowhorse05/md2doc2pdf.git",
-      "python --version   (确认 Python 3.7+)",
-      "pandoc --version   (缺失则用 winget/brew/apt 安装，先问用户)",
-      "扫描工作目录，列出所有文件 (ls -R 或 find)",
-      "读 task.md，如果用户还没填，把文件清单展示给用户，请他勾选需求",
-      "用户说 go / 执行 → 开始转换"
-    ],
+    "on_install": {
+      "phase_1_dependency_check": [
+        "逐项检查 5 个依赖，带用途说明，每个缺失的都问用户装不装",
+        "pandoc 必装 → 缺失则 Y/n；pdftotext/LaTeX/浏览器 → 缺失则 y/N",
+        "安装命令按平台自动选择 (Windows=winget, macOS=brew, Linux=apt)"
+      ],
+      "phase_2_final_choice": [
+        "所有依赖查完后，必须问用户最后的选择题：",
+        "「环境配好了！要不要现在就扫描当前目录，开始转换文档？」",
+        "A. 是，扫描目录并转换 → 进入 scan_and_execute",
+        "B. 我先填 task.md → 打印文件清单 + task.md 用法，等用户说「执行」",
+        "C. 先不 → 告诉用户随时说「执行 task.md」或 python md2docx_pdf.py"
+      ],
+      "phase_3_scan_and_execute": [
+        "扫描当前目录及所有子目录，列出每个文件 (含大小、类型图标)",
+        "读 task.md —— 判断「我的任务」区域是否有具体需求",
+        "if 只有模板占位 → 打印文件清单 + 类型图标，说「请把要转换的文件填到 task.md 的『我的任务』里，勾上格式，然后说 执行」",
+        "if 有具体内容 → 按勾选逐文件转换 (规则见 conversion_rules)",
+        "drawio 文件 → MCP export_diagram 导出 PNG+SVG → 替换 .md 引用 → 转换时图随文档",
+        "输出结构化汇报 (格式见 reporting.template)"
+      ]
+    },
 
     "on_user_says_execute": [
       "重新扫描目录 (用户可能加了新文件)",
       "读 task.md 获取最新勾选",
-      "检查 pandoc + browser + pdftotext + latex，哪个缺了告诉用户怎么装",
+      "检查 pandoc + browser + pdftotext + latex，缺了告诉用户怎么装",
       "按 conversion_rules 逐文件转换",
-      "drawio 文件: 保留 .drawio 源文件，调 MCP export_diagram 导出 PNG 和 SVG",
-      "图表嵌入: .md 中的 ![](xxx.drawio) 替换为 ![](xxx.png)，转 .docx/.pdf 时图片自动嵌入",
-      "写 task.md 的「执行结果」表格",
+      "drawio → MCP 导出 PNG+SVG → .md 引用替换 → 图随文档",
+      "写回 task.md 的「执行结果」",
       "按 reporting.template 输出汇报"
     ],
 
     "context_rules": {
-      "read_all_md": true,
-      "read_all_drawio": true,
-      "docx_pdf_metadata_only": true,
-      "description": ".md 和 .drawio 文件全文读入上下文；.docx/.pdf 只记文件名和大小"
+      "md_files": "全文读入上下文 — 读完整个 .md 便于后续处理",
+      "drawio_files": "全文读入上下文 — 需要检查图表内部引用",
+      "docx_pdf_files": "只记文件名和大小 — 不读正文，节省上下文",
+      "skill_json": "全文读入 — 获取转换规则和汇报模板",
+      "task_md": "全文读入 — 理解用户需求"
     },
 
     "no_task_md_behavior": {
-      "when": "task.md 未被用户修改 (仍是模板)",
-      "action": "打印文件清单 + 类型图标，说「请把要转换的文件填到 task.md 的『我的任务』里，然后说执行」"
+      "when": "task.md 的「我的任务」仍是模板占位文字",
+      "action": "打印文件清单 + 类型图标，说「请把要转换的文件填到 task.md 的『我的任务』里，勾上要转的格式，然后说 执行」",
+      "example": "📄 找到了 3 个文件:\n  📄 report.md (18KB)\n  📄 slides.docx (2.3MB)\n  📊 flow.drawio (45KB)\n\n请把要转换的文件填到 task.md，然后说「执行」"
     },
 
     "has_task_md_behavior": {
-      "when": "task.md 的「我的任务」区域有具体文件名和勾选",
+      "when": "task.md 的「我的任务」有具体文件名和勾选",
       "action": "直接按勾选执行转换，无需再问"
     }
+  },
+
+  "update": {
+    "mechanism": "git pull",
+    "check_command": "python md2docx_pdf.py --update",
+    "description": "自动检查 GitHub 仓库是否有新版本，有则 git pull 更新",
+    "auto_check_on_start": true,
+    "instructions": "每次启动时打印当前版本，如果远端有新版本则提示用户运行 --update"
   },
 
   "conversion_rules": {
@@ -126,13 +179,16 @@
   "reporting": {
     "description": "所有任务完成后，agent 必须输出结构化汇报。格式如下：",
     "required_sections": ["已完成", "未完成", "遇到的问题", "输出文件清单"],
-    "template": "## 📋 转换汇报\n\n### ✅ 已完成\n- (逐条列出完成的项目)\n\n### ❌ 未完成\n- (如有，说明原因)\n\n### ⚠️ 遇到的问题\n- (如有报错/警告/跳过的文件)\n\n### 📁 输出文件\n| 源文件 | 输出 | 大小 | 状态 |\n|--------|------|------|------|\n| xxx.md | xxx.docx | 23KB | OK |\n| xxx.md | xxx.pdf | 650KB | OK |\n\n如果一切顺利没有失败，在汇报末尾加一句：**\"全部转换完成，没有失败。\"**"
+    "template": "## 📋 转换汇报\n\n### ✅ 已完成\n- (逐条列出完成的项目)\n\n### ❌ 未完成\n- (如有，说明原因)\n\n### ⚠️ 遇到的问题\n- (如有报错/警告/跳过的文件)\n\n### 📁 输出文件\n| 源文件 | 输出 | 大小 | 状态 |\n|--------|------|------|------|\n| xxx.md | xxx.docx | 23KB | OK |\n| xxx.md | xxx.pdf | 650KB | OK |\n\n如果一切顺利没有失败，在汇报末尾加一句：**「全部转换完成，没有失败。」**"
   },
 
   "usage": {
+    "install": "git clone https://github.com/cowhorse05/md2doc2pdf.git && cd md2doc2pdf && python md2docx_pdf.py --setup",
+    "setup": "python md2docx_pdf.py --setup   交互式设置向导，选择安装可选组件",
     "scan_mode": "python md2docx_pdf.py           扫描目录，交互式互转",
     "lazy_mode": "python md2docx_pdf.py -y        跳过询问，直接全转",
     "with_drawio": "python md2docx_pdf.py -y --drawio  含图表导出",
-    "single_file": "python md2docx_pdf.py file.md"
+    "single_file": "python md2docx_pdf.py file.md  单文件互转",
+    "update": "python md2docx_pdf.py --update     检查并更新到最新版本"
   }
 }

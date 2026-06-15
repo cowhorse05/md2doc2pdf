@@ -28,7 +28,7 @@ import tempfile
 from pathlib import Path
 from typing import Optional, List, Tuple, Dict
 
-VERSION = "1.3.0"
+VERSION = "1.5.0"
 REPO_URL = "https://github.com/cowhorse05/md2doc2pdf"
 
 # ── Supported extensions ────────────────────────────────────────
@@ -45,6 +45,361 @@ LATEX_INSTALL = {
     'Darwin': 'brew install --cask mactex        (约 4GB，也可用 brew install basictex)',
     'Linux': 'sudo apt install texlive-xetex texlive-latex-extra texlive-lang-chinese',
 }
+
+# ── Config file ──────────────────────────────────────────────────
+def _config_path() -> Path:
+    """Path to the persistent config file (alongside the script)."""
+    return Path(__file__).resolve().parent / '.md2pdf_setup.json'
+
+
+def load_setup_config() -> dict:
+    """Load saved setup choices."""
+    cp = _config_path()
+    if cp.exists():
+        try:
+            import json
+            return json.loads(cp.read_text(encoding='utf-8'))
+        except Exception:
+            pass
+    return {}
+
+
+def save_setup_config(cfg: dict):
+    """Save setup choices to disk."""
+    import json
+    _config_path().write_text(
+        json.dumps(cfg, ensure_ascii=False, indent=2),
+        encoding='utf-8')
+
+
+# ── Self-update ──────────────────────────────────────────────────
+
+def check_update():
+    """Check GitHub for newer versions and offer to git pull."""
+    script_dir = Path(__file__).resolve().parent
+    git_dir = script_dir / '.git'
+    if not git_dir.exists():
+        print("  未检测到 git 仓库，无法自动更新。")
+        print(f"  请手动访问: {REPO_URL}")
+        return False
+
+    print(f"  当前版本: v{VERSION}")
+    print(f"  远程仓库: {REPO_URL}")
+    print()
+
+    # Fetch latest tags from remote
+    print("  正在检查更新...")
+    ret = subprocess.run(
+        ['git', 'fetch', 'origin', '--tags'],
+        capture_output=True, timeout=30, cwd=str(script_dir)
+    )
+    if ret.returncode != 0:
+        print("  ⚠ 无法连接到远程仓库，请检查网络。")
+        print(f"  手动检查: {REPO_URL}/releases")
+        return False
+
+    # Get latest tag
+    ret = subprocess.run(
+        ['git', 'tag', '--sort=-creatordate'],
+        capture_output=True, timeout=10, cwd=str(script_dir),
+        text=True
+    )
+    tags = [t.strip() for t in ret.stdout.strip().split('\n') if t.strip()]
+    # Non-tagged: check if origin/main is ahead
+    ret2 = subprocess.run(
+        ['git', 'rev-list', '--count', 'HEAD..origin/main'],
+        capture_output=True, timeout=10, cwd=str(script_dir),
+        text=True
+    )
+    behind = int(ret2.stdout.strip()) if ret2.stdout.strip().isdigit() else 0
+
+    if behind > 0 or (tags and tags[0] != f'v{VERSION}'):
+        print(f"  🔔 发现新版本!")
+        if tags:
+            print(f"     最新标签: {tags[0]}")
+        print(f"     落后 {behind} 个提交")
+        print()
+        ans = input("  是否更新到最新版本? [Y/n] ").strip().lower()
+        if ans != 'n':
+            print("  正在 git pull...")
+            ret = subprocess.run(
+                ['git', 'pull', 'origin', 'main'],
+                capture_output=True, timeout=30, cwd=str(script_dir)
+            )
+            if ret.returncode == 0:
+                print("  ✓ 更新成功! 请重新运行以使用新版本。")
+
+                # Re-read VERSION from updated file
+                version_file = script_dir / 'md2docx_pdf.py'
+                if version_file.exists():
+                    import re
+                    content = version_file.read_text(encoding='utf-8')
+                    m = re.search(r'VERSION\s*=\s*"([^"]+)"', content)
+                    if m:
+                        print(f"  新版本: v{m.group(1)}")
+                return True
+            else:
+                print("  ⚠ git pull 失败，请手动更新:")
+                print(f"    cd {script_dir} && git pull origin main")
+                return False
+        else:
+            print("  已跳过更新。")
+            return False
+    else:
+        print("  ✓ 已是最新版本。")
+        return True
+
+def setup_wizard():
+    """
+    Interactive setup wizard --- walks through all dependencies,
+    letting the user choose which optional components to install.
+    """
+    cfg = load_setup_config()
+    installed = set(cfg.get('installed', []))
+    skipped = set(cfg.get('skipped', []))
+
+    print()
+    print("=" * 60)
+    print("  md2docx_pdf 设置向导")
+    print("=" * 60)
+    print()
+
+    step = 0
+    total = 5
+
+    # ── Step 1: Python ───────────────────────────────────────
+    step += 1
+    py_ver = sys.version.split()[0]
+    print(f"  [{step}/{total}] Python 环境")
+    print(f"  Python {py_ver}  ✓")
+    print()
+
+    # ── Step 2: pandoc (required) ────────────────────────────
+    step += 1
+    print(f"  [{step}/{total}] pandoc (必装，所有格式转换都需要)")
+    if shutil.which('pandoc'):
+        v = subprocess.run(
+            ['pandoc', '--version'], capture_output=True, timeout=5
+        ).stdout.decode('utf-8', errors='replace').split('\n')[0]
+        print(f"  {v}  ✓")
+        installed.discard('pandoc')
+        skipped.discard('pandoc')
+    else:
+        print("  [缺失] pandoc 未安装")
+        cmd = PANDOC_INSTALL.get(plat(), '请访问 https://pandoc.org/installing.html')
+        print(f"  安装命令: {cmd}")
+        print()
+        ans = input("  是否现在安装? [Y/n] ").strip().lower()
+        if ans != 'n':
+            print(f"  正在执行: {cmd}")
+            ret = os.system(cmd)
+            if ret == 0 and shutil.which('pandoc'):
+                print("  pandoc 安装成功 ✓")
+                installed.add('pandoc')
+                skipped.discard('pandoc')
+            else:
+                print("  安装可能失败，请手动安装后重试。")
+        else:
+            print("  已跳过 (pandoc 是必装项，转换前需要手动安装)")
+            skipped.add('pandoc')
+    print()
+
+    # ── Step 3: pdftotext (optional) ─────────────────────────
+    step += 1
+    print(f"  [{step}/{total}] pdftotext (可选，PDF → 文字提取)")
+    print("  用途: 把 PDF 转回 .md / .docx，提取 PDF 中的文字内容")
+    if has_pdftotext():
+        print("  pdftotext 已安装 ✓")
+        installed.add('pdftotext')
+        skipped.discard('pdftotext')
+    else:
+        cmd = PDFTOTEXT_INSTALL.get(plat(), '请搜索 poppler-utils')
+        print(f"  [未安装] 安装命令: {cmd}")
+        print()
+        ans = input("  是否安装? [y/N] ").strip().lower()
+        if ans == 'y':
+            print(f"  正在执行: {cmd}")
+            ret = os.system(cmd)
+            if ret == 0 and has_pdftotext():
+                print("  pdftotext 安装成功 ✓")
+                installed.add('pdftotext')
+                skipped.discard('pdftotext')
+            else:
+                print("  安装可能失败，请手动安装后重试。")
+                skipped.add('pdftotext')
+        else:
+            print("  已跳过 (以后需要可重新运行 --setup)")
+            skipped.add('pdftotext')
+    print()
+
+    # ── Step 4: LaTeX (optional) ─────────────────────────────
+    step += 1
+    print(f"  [{step}/{total}] LaTeX (可选，.tex → PDF 编译)")
+    print("  用途: 编译 .tex 文件为 PDF")
+    print("  ⚠ 注意: 安装包较大 (数百MB ~ 4GB)，仅 .tex 文件编译需要")
+    latex_cmd = has_latex()
+    if latex_cmd:
+        print(f"  {Path(latex_cmd).name} 已安装 ✓")
+        installed.add('latex')
+        skipped.discard('latex')
+    else:
+        cmd = LATEX_INSTALL.get(plat(), '手动安装 texlive 或 miktex')
+        print(f"  [未安装] 安装命令: {cmd}")
+        print()
+        ans = input("  是否安装? [y/N] ").strip().lower()
+        if ans == 'y':
+            print(f"  正在执行: {cmd}")
+            print("  (安装可能需要较长时间，请耐心等待...)")
+            ret = os.system(cmd)
+            if ret == 0 and has_latex():
+                print("  LaTeX 安装成功 ✓")
+                installed.add('latex')
+                skipped.discard('latex')
+            else:
+                print("  安装可能失败，请手动安装后重试。")
+                skipped.add('latex')
+        else:
+            print("  已跳过 (以后需要可重新运行 --setup)")
+            skipped.add('latex')
+    print()
+
+    # ── Step 5: Browser (PDF output) ─────────────────────────
+    step += 1
+    print(f"  [{step}/{total}] 浏览器 (PDF 输出需要)")
+    print("  用途: HTML → PDF 渲染，生成排版精美的 PDF 文件")
+    browser = None
+    for name in ['google-chrome', 'chrome', 'chromium', 'msedge']:
+        browser = find_tool(name, BROWSER_SEARCH.get(plat(), []))
+        if browser:
+            break
+    if browser:
+        print(f"  {Path(browser).name} ✓  ({browser})")
+        installed.add('browser')
+        skipped.discard('browser')
+    else:
+        print("  [未检测到] 搜索了以下位置:")
+        for p in BROWSER_SEARCH.get(plat(), []):
+            exists = "✓" if os.path.isfile(p) else "✗"
+            print(f"    {exists} {p}")
+        print()
+        print("  请选择:")
+        print("    1. 手动输入浏览器路径")
+        print("    2. 安装 Chrome (推荐)")
+        print("    3. 跳过 (PDF 输出将不可用)")
+        ans = input("  请选择 [1/2/3] (默认 3): ").strip()
+        if ans == '1':
+            path = input("  请输入浏览器可执行文件路径: ").strip()
+            if path and (os.path.isfile(path) or shutil.which(path)):
+                cfg['browser_path'] = path
+                print(f"  已设置浏览器路径: {path}")
+                installed.add('browser')
+            else:
+                print("  路径无效，已跳过。")
+                skipped.add('browser')
+        elif ans == '2':
+            p = plat()
+            if p == 'Windows':
+                print("  请手动下载安装 Chrome: https://www.google.com/chrome/")
+                print("  或使用系统自带的 Edge (通常自动检测到)")
+            elif p == 'Darwin':
+                print("  brew install --cask google-chrome")
+                print("  或手动下载: https://www.google.com/chrome/")
+                ans2 = input("  是否用 brew 安装? [y/N] ").strip().lower()
+                if ans2 == 'y':
+                    os.system('brew install --cask google-chrome')
+            else:
+                print("  sudo apt install chromium-browser")
+                print("  或: wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -")
+                ans2 = input("  是否用 apt 安装 chromium? [y/N] ").strip().lower()
+                if ans2 == 'y':
+                    os.system('sudo apt install -y chromium-browser')
+            skipped.add('browser')
+        else:
+            print("  已跳过 (PDF 输出将不可用，以后需要可重新运行 --setup)")
+            skipped.add('browser')
+    print()
+
+    # ── Step 6: Final choice — scan & execute? ────────────────
+    step += 1
+    print(f"  [{step}/{step}] 【最后选项】是否现在扫描目录并完成任务?")
+    print()
+    if 'pandoc' in skipped:
+        print("  ⚠ pandoc 未安装，无法继续转换。请先安装 pandoc。")
+        print()
+    else:
+        print("  环境配好了！要不要现在就扫描当前目录，开始转换文档？")
+        print("    A. 是，扫描目录并转换")
+        print("    B. 我先填 task.md，待会说「执行」")
+        print("    C. 先不，以后再说")
+        print()
+        ans = input("  请选择 [A/B/C] (默认 B): ").strip().upper()
+        cfg['final_choice'] = ans if ans else 'B'
+
+        if ans == 'A':
+            cfg['auto_scan'] = True
+            save_setup_config(cfg)
+            print()
+            print("=" * 60)
+            print("  开始扫描目录...")
+            print("=" * 60)
+            # Fall through to scan mode — return signal to main()
+            # We set a flag in config so main() knows to auto-scan
+        elif ans == 'C':
+            print()
+            print("  好的，随时可以说「执行 task.md」或运行:")
+            print("    python md2docx_pdf.py")
+            print("    python md2docx_pdf.py -y")
+        else:
+            print()
+            print("  好的，请把要转换的文件填到 task.md 的「我的任务」里，")
+            print("  勾上要转的格式，然后说「执行 task.md」。")
+            print()
+            print("  或者直接运行:")
+            print("    python md2docx_pdf.py          扫描目录，交互转换")
+            print("    python md2docx_pdf.py -y       跳过询问，直接全转")
+            print("    python md2docx_pdf.py file.md  单文件互转")
+
+    # ── Summary ──────────────────────────────────────────────
+    print()
+    print("=" * 60)
+    print("  设置完成!")
+    print()
+    if installed:
+        print(f"  ✓ 已安装: {', '.join(sorted(installed))}")
+    if skipped:
+        skipped_friendly = []
+        for s in sorted(skipped):
+            label = {
+                'pandoc': 'pandoc (必装!)',
+                'pdftotext': 'pdftotext (PDF→文字)',
+                'latex': 'LaTeX (.tex→PDF)',
+                'browser': '浏览器 (PDF输出)',
+            }.get(s, s)
+            skipped_friendly.append(label)
+        print(f"  ○ 已跳过: {', '.join(skipped_friendly)}")
+    if 'pandoc' in skipped:
+        print()
+        print("  ⚠ pandoc 是必装项! 转换前请先手动安装:")
+        print(f"    {PANDOC_INSTALL.get(plat(), 'https://pandoc.org/installing.html')}")
+    print()
+    print("  提示: 可随时重新运行 python md2docx_pdf.py --setup 安装跳过的组件")
+    print("  更新: python md2docx_pdf.py --update    检查并更新到最新版本")
+    print("=" * 60)
+
+    # Save choices
+    cfg['installed'] = sorted(installed)
+    cfg['skipped'] = sorted(skipped)
+    cfg['last_setup'] = True
+    save_setup_config(cfg)
+
+    # If auto_scan, don't exit — return to main() for scan+convert
+    if cfg.get('auto_scan'):
+        return  # Let main() continue to scan and convert
+
+    # If pandoc missing, don't proceed to conversion
+    if 'pandoc' in skipped:
+        sys.exit(1)
+    sys.exit(0)
 
 # ── CSS for PDF ───────────────────────────────────────────────
 CHINESE_CSS = """<style>
@@ -477,6 +832,12 @@ GitHub: {REPO_URL}
                         help='跳过确认，直接全部转换')
     parser.add_argument('--drawio', action='store_true',
                         help='启用 drawio 图表导出 (需要 drawio MCP)')
+    parser.add_argument('--setup', action='store_true',
+                        help='运行交互式设置向导，选择安装可选组件')
+    parser.add_argument('--install', action='store_true',
+                        help='同 --setup，运行交互式设置向导')
+    parser.add_argument('--update', '--upgrade', action='store_true',
+                        help='检查 GitHub 仓库是否有新版本并更新')
     parser.add_argument('--version', action='version',
                         version=f'md2docx_pdf v{VERSION}')
 
@@ -484,6 +845,23 @@ GitHub: {REPO_URL}
 
     print(f"\n  md2docx_pdf v{VERSION}  {REPO_URL}")
     print(f"  平台: {plat()}")
+
+    # ── Update check ───────────────────────────────────────
+    if getattr(args, 'update', False):
+        check_update()
+        sys.exit(0)
+
+    # ── Setup wizard ──────────────────────────────────────
+    if args.setup or args.install:
+        setup_wizard()
+        # setup_wizard may return (if auto_scan) or sys.exit(0)
+        # If it returned with auto_scan, continue to scan below
+        cfg = load_setup_config()
+        if not cfg.get('auto_scan'):
+            sys.exit(0)
+        # auto_scan: force scan mode with current directory
+        print("  自动进入扫描模式...")
+        args.scan = '.'  # Trigger scan mode below
 
     # Check pandoc
     if not ensure_pandoc():
