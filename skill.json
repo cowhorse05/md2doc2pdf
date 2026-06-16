@@ -289,6 +289,30 @@
     }
   },
 
+  "hidden_features": {
+    "paper_writing": {
+      "enabled": false,
+      "description": "论文写作辅助 — 默认关闭，需用户明确同意后才启用。长程分章写作，逐章确认推进。",
+      "trigger_keywords": ["写论文", "论文写作", "帮我写论文", "毕业论文", "开题报告", "启用论文模式", "论文辅助", "学术写作"],
+      "requires_explicit_consent": true,
+      "consent_prompt": "你确定要启用论文写作辅助吗？\n\n⚠️ 重要提示：\n1. 论文写作是长程任务，建议分章节逐章进行\n2. 所有生成的参考文献必须经过验证（防造假策略始终生效）\n3. AI 生成的内容仅作参考，最终内容需你自行审核\n4. 此功能会消耗较多 token，耗时较长\n\n是否继续？[Y/n]",
+      "workflow": {
+        "phase_a": "前期准备: 了解主题 → 解析参考文献 → 确定提纲 → 确认格式",
+        "phase_b": "逐章写作: 讨论目标 → 生成初稿 → 用户审阅 → 修改迭代(最多3轮) → 确认 → 下一章",
+        "phase_c": "整体打磨: 逻辑连贯性 → 参考文献验证 → 格式统一 → 生成摘要",
+        "phase_d": "输出: .md → .docx(中文学术格式) → .pdf → 验证报告"
+      },
+      "constraints": {
+        "chapter_by_chapter": "一章确认后才开始下一章，不自动跳转",
+        "citation_verification": "所有参考文献必须通过 DOI/CrossRef 验证",
+        "user_driven": "每章由用户确认方向，AI 不替用户做学术判断",
+        "graceful_exit": "用户可说「退出论文模式」保留已写内容",
+        "auto_suppression": "论文模式下抑制自动扫描/批量转换等功能"
+      },
+      "exit_keywords": ["退出论文模式", "结束论文", "论文写完了"]
+    }
+  },
+
   "conversion_rules": {
     ".md": "→ .docx + .pdf（委托 docx skill + pdf skill）",
     ".md_pptx": "→ .pptx（委托 pptx skill，如 task.md 要求）",
