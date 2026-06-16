@@ -180,6 +180,10 @@ DocWizard 基于以下优秀的 Claude Code 技能和开源项目构建：
 | `Typst MCP Server` | Typst 排版 MCP 集成 | MCP 生态 |
 | `mcp-pandoc` | Markdown/HTML/LaTeX 转换 MCP | MCP 生态 |
 | `awesome-claude-skills` | 1000+ Claude Code 技能库参考 | [ComposioHQ](https://github.com/ComposioHQ/awesome-claude-skills) |
+| `CrossRef` / `Semantic Scholar` | 参考文献 DOI 验证 API | [crossref.org](https://crossref.org) |
+| `refcheck` MCP | 参考文献自动验证 | MCP 生态 |
+| `CheckIfExist` | 批量 BibTeX 多源验证 | GitHub 开源 |
+| `VeriBib` | AI 幻觉引用检测 | GitHub 开源 |
 | `tectonic` | LaTeX 编译引擎（推荐） | [tectonic-typesetting](https://github.com/tectonic-typesetting/tectonic) |
 | `Pdf It` (MCP) | Markdown→专业 PDF（目录/页码/字体嵌入） | MCP 生态 |
 | `skill-forge` | Skill 构建元工具 | Claude Code 官方 |

@@ -237,6 +237,22 @@
 
   "reference_management": {
     "description": "从 .bib 文件生成格式化参考文献列表（作业级别，非论文级别）",
+    "anti_hallucination": {
+      "policy": "绝对禁止 AI 编造参考文献。所有引用必须来自用户提供的 .bib 文件或手写来源。",
+      "verification": {
+        "doi": "CrossRef API 验证 DOI 是否存在",
+        "title": "Semantic Scholar API 搜索论文标题",
+        "dblp": "DBLP API 验证 CS 论文",
+        "arxiv": "arXiv API 验证预印本"
+      },
+      "external_tools": {
+        "refcheck_mcp": "自动验证参考文献 MCP 服务器",
+        "check_if_exist": "批量 BibTeX 多源验证",
+        "veribib": "Semantic Scholar API 检测 AI 幻觉引用"
+      },
+      "failure_threshold": "验证失败率 > 20% 时停止输出，要求用户提供正确参考文献",
+      "verification_report": "输出文档末尾附加验证报告，标注每条引用的验证状态"
+    },
     "supported_formats": {
       "gbt7714": "GB/T 7714 — 中国高校论文标准",
       "apa": "APA 7th — 心理学、教育学",

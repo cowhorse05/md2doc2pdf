@@ -640,6 +640,75 @@ grep -c '\$\$' <file.md>
 
 支持从 `.bib` 文件生成格式化参考文献列表，支持常用引用格式。
 
+### ⚠️ 参考文献防造假策略（必须遵守！）
+
+**AI 生成参考文献存在严重的"造假"风险**——模型会编造看起来真实但根本不存在的论文。DocWizard 采用多层防护：
+
+#### 第一层：来源约束
+
+```
+参考文献只能来自以下来源:
+  1. 用户提供的 .bib 文件（最可靠）
+  2. 用户手写在 Markdown 中的参考文献
+  3. 用户明确提到的论文标题/作者/DOI
+
+绝对禁止:
+  ❌ AI 凭空编造参考文献
+  ❌ AI 根据"常识"补充不存在的论文
+  ❌ 生成 DOI 后不验证就直接使用
+```
+
+#### 第二层：DOI 验证
+
+对每一条参考文献，如果有 DOI，必须验证：
+
+```python
+import urllib.request, json
+def verify_doi(doi):
+    """通过 CrossRef API 验证 DOI 是否存在"""
+    url = f'https://api.crossref.org/works/{doi}'
+    req = urllib.request.Request(url, headers={'User-Agent': 'DocWizard/3.0'})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+            return data['status'] == 'ok'
+    except:
+        return False
+```
+
+#### 第三层：多源交叉验证
+
+| 验证源 | API | 适用领域 |
+|--------|-----|----------|
+| CrossRef | `api.crossref.org/works/{doi}` | 全学科 DOI 验证 |
+| Semantic Scholar | `api.semanticscholar.org/graph/v1/paper/search?query={title}` | 论文标题搜索 |
+| DBLP | `dblp.org/search/publ/api?q={title}` | 计算机科学 |
+| arXiv | `export.arxiv.org/api/query?search_query={title}` | 预印本 |
+
+#### 第四层：验证报告
+
+输出文档末尾附加验证报告：
+
+```
+## 参考文献验证报告
+
+| 序号 | 引用 | 验证状态 | 来源 |
+|------|------|----------|------|
+| [1] | Zhang et al. (2023) | ✅ DOI 验证通过 | user.bib |
+| [2] | Li & Wang (2022) | ✅ Semantic Scholar 确认 | user.bib |
+| [3] | Chen et al. (2024) | ⚠️ 未找到 DOI，人工确认 | Markdown 手写 |
+```
+
+**如果参考文献验证失败率 > 20%**：停止输出，向用户报告问题，要求用户提供正确的参考文献。
+
+#### 可集成的外部工具
+
+| 工具 | 用途 | 集成方式 |
+|------|------|----------|
+| `refcheck` MCP | 自动验证参考文献 | 安装: 搜索 refcheck MCP server |
+| `CheckIfExist` | 批量 BibTeX 验证 (Crossref/Semantic Scholar/OpenAlex) | GitHub 开源工具 |
+| `VeriBib` | Semantic Scholar API 检测 AI 幻觉引用 | GitHub 开源工具 |
+
 ### 触发条件
 
 - 目录中存在 `.bib` 文件
