@@ -252,12 +252,21 @@
   },
 
   "pdf_enhancement": {
-    "description": "当 document-skills pdf skill 对扫描版 PDF 效果不佳时的补充方案",
+    "description": "当 document-skills pdf skill 对扫描版 PDF 效果不佳时的补充方案。分层策略：文字 OCR → 结构化 OCR（表格+图片）。",
     "skills": {
-      "pdf-converter-mineru": {"use": "扫描版 PDF OCR、复杂排版论文解析", "install": "/plugin install pdf-converter-mineru"},
+      "pdf-converter-mineru": {"use": "扫描版 PDF OCR、复杂排版论文解析", "install": "/plugin install pdf-converter-mineru", "tier": 2},
       "pdf-toolkit-mcp": {"use": "PDF 合并/拆分/水印/加密", "install": "/plugin install pdf-toolkit-mcp"}
     },
-    "auto_detect": "用 pdfplumber 检测 PDF 第一页文字量，< 50 字符判定为扫描版"
+    "auto_detect": "用 pdfplumber 检测 PDF 第一页文字量，< 50 字符判定为扫描版",
+    "layer4_structured_ocr": {
+      "description": "表格+图片结构化提取。基础 OCR 丢失表格结构和图片区域，层级 4 工具保留结构化信息。",
+      "tools": {
+        "chandra-ocr": {"priority": 1, "use": "扫描件表格+图片+全文结构", "output": "HTML/Markdown/JSON", "install": "pip install chandra-ocr", "license": "Apache 2.0", "accuracy": "88%+"},
+        "surya-ocr": {"priority": 2, "use": "多语言 OCR + 表格检测 + 布局分析", "output": "HTML/Markdown", "install": "pip install surya-ocr", "license": "GPL-3.0", "accuracy": "90+ 语言"},
+        "llama-cloud": {"priority": 3, "use": "VLM 云端文档解析（表格+图表语义理解）", "output": "Markdown", "install": "pip install llama-cloud", "license": "免费 1K页/天", "note": "llama-parse 已弃用，请用 llama-cloud>=1.0"},
+        "smoldocling": {"priority": 4, "use": "256M 轻量文档解析 VLM", "output": "DocTags→HTML/Markdown/JSON", "install": "pip install docling", "license": "Apache 2.0 / CDLA", "performance": "0.35s/页, <1GB 显存"}
+      }
+    }
   },
 
   "formula_enhancement": {

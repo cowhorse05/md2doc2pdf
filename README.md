@@ -277,6 +277,10 @@ DocWizard builds upon these excellent Claude Code skills and open-source project
 | `Quarto` | Scientific publishing system | [quarto-dev](https://github.com/quarto-dev/quarto-cli) |
 | `Awesome Typst CN` | Chinese university Typst templates | [qjcg](https://github.com/qjcg/awesome-typst) |
 | `Camelot` | PDF table extraction | [camelot-dev](https://github.com/camelot-dev/camelot) |
+| `Chandra OCR` | Scanned table+image structured extraction | [datalab-to](https://github.com/datalab-to/chandra-ocr) |
+| `Surya OCR` | Multilingual OCR + table detection + layout | [VikParuchuri](https://github.com/VikParuchuri/surya) |
+| `LlamaParse` | VLM-powered document parsing (tables+charts) | [LlamaIndex](https://www.llamaindex.ai/llamaparse) |
+| `SmolDocling` | 256M lightweight document parsing VLM | [DS4SD](https://github.com/DS4SD/docling) |
 
 ---
 

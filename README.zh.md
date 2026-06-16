@@ -258,6 +258,10 @@ DocWizard 基于以下优秀的 Claude Code 技能和开源项目构建：
 | `Camelot` | PDF 表格提取 | [camelot-dev](https://github.com/camelot-dev/camelot) |
 | `MinerU Skill` | Claude Code 扫描 PDF OCR Skill | [Nebutra](https://github.com/Nebutra/MinerU-Skill) |
 | `marker-pdf` | 本地高精度 PDF OCR+布局 | [datalab-to](https://github.com/datalab-to/marker-pdf) |
+| `Chandra OCR` | 扫描件表格+图片结构化提取 | [datalab-to](https://github.com/datalab-to/chandra-ocr) |
+| `Surya OCR` | 多语言 OCR + 表格检测 + 布局分析 | [VikParuchuri](https://github.com/VikParuchuri/surya) |
+| `LlamaParse` | VLM 驱动文档解析（表格+图表） | [LlamaIndex](https://www.llamaindex.ai/llamaparse) |
+| `SmolDocling` | 256M 轻量文档解析 VLM | [DS4SD](https://github.com/DS4SD/docling) |
 
 ---
 
