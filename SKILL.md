@@ -36,17 +36,26 @@ git clone https://github.com/cowhorse05/DocWizard.git .agents/skills/DocWizard
   └─ 无法判断 → 默认 Claude Code 模式
 ```
 
-## 触发条件
+## AI 激活策略
 
-当用户提到以下任意关键词时，自动激活此 Skill：
-- 「转换文档」「执行 task.md」「开始转换」「DocWizard」
-- 「处理作业」「导出为 docx/pdf」「生成 PPT」
-- 「分析数据」「处理 CSV/Excel」「数据报告」
-- 当前目录存在 `task.md` 且用户说「执行」
+**自动激活** — 当用户提到以下任意关键词或场景时，自动加载此 Skill：
 
-**⚠️ 注意：以下操作不会自动触发 Skill（避免误激活长程任务）：**
-- 「写论文」「论文写作」「帮我写毕业论文」→ 属于**隐藏功能**，需用户明确同意后才启用（见文末「隐藏功能」章节）
-- 「翻译」「润色」「改写」→ 这些是 AI 基础能力，不需要 DocWizard 介入
+| 类别 | 触发词/场景 |
+|------|------------|
+| **格式转换** | 转 PDF、转 Word、转 DOCX、导 PDF、排版、格式转换、Markdown 转、md 转 docx、文档转换、生成 PDF |
+| **作业处理** | 大学作业、处理作业、交作业、课程报告、实验报告、大作业、课程设计 |
+| **数据分析** | 分析数据、处理 CSV、处理 Excel、数据报告、数据分析、画图表 |
+| **PPT 制作** | 生成 PPT、做 PPT、演示文稿、PPTX、Slides |
+| **文档处理** | 解压、压缩包作业、批量处理文档、转换文档 |
+| **LaTeX/Typst** | LaTeX 编译、编译 tex、typst 编译、tex 转 pdf、latex 报错 |
+| **图表渲染** | Mermaid 渲染、流程图转图片、Mermaid 导出 |
+| **task.md** | 当前目录存在 `task.md` 且用户说「执行」 |
+
+**手动激活** — 用户直接说「DocWizard」或「启用 DocWizard」
+
+**⚠️ 以下情况不自动激活：**
+- 「写论文」「论文写作」「帮我写毕业论文」→ 属于**隐藏功能**，需用户明确同意后才启用（见文末）
+- 「翻译」「润色」「改写」→ AI 基础能力，不需要 DocWizard 介入
 
 ---
 
@@ -275,9 +284,31 @@ fi
 ```
 
 **5a. Mermaid 图表渲染**（三平台通用，纯 stdlib）：
+
+⚠️ **执行前先检测 mermaid.ink 服务可用性**（该服务需要外网访问，国内用户可能受限）：
 ```bash
-python helpers/render_mermaid.py <file.md> --output-dir ./output
+python -c "
+import urllib.request, json
+try:
+    req = urllib.request.Request('https://mermaid.ink/img/eyJjb2RlIjoiZ3JhcGggVERcbiAgICBBW0hlbGxvXSAtLT4gQntXb3JsZH0ifQ==', headers={'User-Agent': 'DocWizard/3.1'})
+    resp = urllib.request.urlopen(req, timeout=10)
+    if resp.status == 200 and len(resp.read()) > 100:
+        print('MERMAID_INK: OK')
+    else:
+        print('MERMAID_INK: FAIL')
+except Exception as e:
+    print(f'MERMAID_INK: FAIL ({e})')
+"
 ```
+
+- 检测通过 → 执行渲染：
+  ```bash
+  python helpers/render_mermaid.py <file.md> --output-dir ./output
+  ```
+- 检测失败 → 跳过 Mermaid 渲染，在汇报中注明「⚠️ mermaid.ink 服务不可用，Mermaid 图表未能渲染为 PNG。DOCX 中将保留原始 Mermaid 代码块。」
+- 备选方案：安装 `mermaid-cli`（`npm install -g @mermaid-js/mermaid-cli`），后续可用 `mmdc` 本地渲染
+
+**渲染后验证**：检查输出 PNG 文件大小 > 100 bytes，否则视为失败。
 
 **5b. DrawIO 图表导出**（如有 DrawIO MCP）：
 - 调用 MCP `export_diagram` → PNG + SVG
