@@ -1,231 +1,153 @@
 {
   "name": "DocWizard",
-  "version": "2.0.0",
-  "description": "DocWizard — AI 驱动的作业助手：说一句话，Markdown 到 Word/PDF 自动完成。图表渲染管线、智能格式互转、可选依赖安装。",
-  "entry": "md2docx_pdf.py",
-  "test": "test_converter.py",
+  "version": "3.0.0",
+  "description": "DocWizard — AI 驱动的作业一站式助手：通过 document-skills 插件完成 Markdown/Word/PDF/PPT/Excel 互转与生成。零外部依赖，支持压缩包解压、中文学术排版。",
+  "entry": "SKILL.md",
+  "test": "test_helpers.py",
   "task_file": "task.md",
   "agent_manual": "SKILL.md",
   "repository": "https://github.com/cowhorse05/DocWizard",
   "license": "MIT",
-  "python": ">=3.7",
+
+  "requires": {
+    "plugins": ["document-skills@anthropic-agent-skills"],
+    "python": ">=3.7",
+    "description": "Python 仅用于 Mermaid 图表渲染和 DOCX 黑体后处理（均为 stdlib 零依赖脚本）。document-skills 插件包含 docx/pdf/pptx/xlsx 四个 Skill。"
+  },
 
   "install": {
     "clone": "git clone https://github.com/cowhorse05/DocWizard.git",
-    "setup_wizard": "python md2docx_pdf.py --setup",
-    "description": "首次安装后运行 --setup 进入交互式向导，逐项检查依赖并提供可选安装。最后一步问用户是否扫描目录开始转换。",
-
-    "choices": [
-      {
-        "step": 1,
-        "title": "Python 环境",
-        "check": "python --version",
-        "required": true
-      },
-      {
-        "step": 2,
-        "title": "pandoc — 必装，所有格式转换的引擎",
-        "check": "pandoc --version",
-        "install_windows": "winget install pandoc",
-        "install_macos": "brew install pandoc",
-        "install_linux": "sudo apt install pandoc",
-        "required": true,
-        "ask_user": true,
-        "prompt": "pandoc 没装，所有格式转换都需要它。是否现在安装？[Y/n]"
-      },
-      {
-        "step": 3,
-        "title": "pdftotext — 可选，把 PDF 转回文字",
-        "usage": "提取 PDF 内容转为 .md/.docx",
-        "check": "pdftotext -v",
-        "install_windows": "winget install xpdfreader.xpdf-tools",
-        "install_macos": "brew install poppler",
-        "install_linux": "sudo apt install poppler-utils",
-        "required": false,
-        "ask_user": true,
-        "prompt": "pdftotext 可以把 PDF 转回可编辑的文档。是否安装？[y/N]"
-      },
-      {
-        "step": 4,
-        "title": "LaTeX — 可选，编译 .tex 为 PDF",
-        "usage": "编译 LaTeX 论文/作业为 PDF",
-        "check": "xelatex --version || pdflatex --version",
-        "install_windows": "winget install MiKTeX.MiKTeX",
-        "install_macos": "brew install --cask basictex",
-        "install_linux": "sudo apt install texlive-xetex texlive-latex-extra texlive-lang-chinese",
-        "required": false,
-        "ask_user": true,
-        "prompt": "LaTeX 可以把 .tex 编译成 PDF。注意安装包较大(数百MB~4GB)。是否安装？[y/N]",
-        "note": "MiKTeX/mactex 体积大，仅 .tex 文件编译时需要"
-      },
-      {
-        "step": 5,
-        "title": "浏览器 — 可选，HTML→PDF 渲染",
-        "usage": "把文档渲染为排版精美的 PDF",
-        "check": "chrome --version || msedge --version",
-        "required": false,
-        "ask_user": true,
-        "prompt": "PDF 输出需要浏览器渲染引擎。没检测到 Chrome/Edge，要手动指定路径吗？",
-        "note": "Windows 自带 Edge 通常自动检测到"
-      },
-      {
-        "step": 6,
-        "title": "【最后选项】是否现在扫描目录并完成任务？",
-        "required": true,
-        "ask_user": true,
-        "prompt": "环境配好了！要不要现在就扫描当前目录，开始转换文档？",
-        "options": [
-          {"label": "是，扫描目录并转换", "action": "scan_and_execute"},
-          {"label": "我先填 task.md，待会说「执行」", "action": "show_file_list_and_wait"},
-          {"label": "先不，以后再说", "action": "show_how_to_continue"}
-        ]
-      }
-    ]
+    "plugin_install": "/plugin install document-skills@anthropic-agent-skills",
+    "description": "安装 document-skills 插件并 clone DocWizard 仓库即可使用。无需 pandoc/Chrome/pdftotext/LaTeX。"
   },
 
   "agent_workflow": {
     "on_install": {
-      "phase_1_dependency_check": [
-        "逐项检查 5 个依赖，带用途说明，每个缺失的都问用户装不装",
-        "pandoc 必装 → 缺失则 Y/n；pdftotext/LaTeX/浏览器 → 缺失则 y/N",
-        "安装命令按平台自动选择 (Windows=winget, macOS=brew, Linux=apt)"
+      "phase_1_plugin_check": [
+        "检查 document-skills@anthropic-agent-skills 插件是否已安装",
+        "未安装 → 引导用户执行 /plugin install document-skills@anthropic-agent-skills",
+        "已安装 → 确认 Python 可用性（仅用于 helper 脚本）"
       ],
       "phase_2_final_choice": [
-        "所有依赖查完后，必须问用户最后的选择题：",
-        "「环境配好了！要不要现在就扫描当前目录，开始转换文档？」",
-        "A. 是，扫描目录并转换 → 直接用 python md2docx_pdf.py -y 一把梭，不要逐文件问",
+        "所有检查完毕后，必须问用户最后的选择题：",
+        "「环境配好了！要不要现在就扫描当前目录，开始处理文档？」",
+        "A. 是，扫描目录并处理 → 直接进入 7 阶段流水线，用 -y 思维一把梭，不要逐文件问",
         "B. 我先填 task.md → 打印文件清单 + task.md 用法，等用户说「执行」",
-        "C. 先不 → 告诉用户随时说「执行 task.md」或 python md2docx_pdf.py"
-      ],
-      "phase_3_scan_and_execute": [
-        "用户选 A 或说「执行」后，直接用 -y 跳过所有确认：python md2docx_pdf.py -y",
-        "有 drawio 加 --drawio: python md2docx_pdf.py -y --drawio",
-        "不要逐文件停下来问用户 — 用户说了执行就是全自动",
-        "扫描当前目录及所有子目录，列出每个文件 (含大小、类型图标)",
-        "读 task.md —— 判断「我的任务」区域是否有具体需求",
-        "if 只有模板占位 → 打印文件清单 + 类型图标，说「请把要转换的文件填到 task.md 的『我的任务』里，勾上格式，然后说 执行」",
-        "if 有具体内容 → 按勾选逐文件转换 (规则见 conversion_rules)",
-        "drawio 文件 → MCP export_diagram 导出 PNG+SVG → 替换 .md 引用 → 转换时图随文档",
-        "输出结构化汇报 (格式见 reporting.template)"
+        "C. 先不 → 告诉用户随时说「执行 task.md」"
       ]
     },
-
     "on_user_says_execute": [
-      "重新扫描目录 (用户可能加了新文件)",
+      "重新扫描目录（用户可能加了新文件或压缩包）",
       "读 task.md 获取最新勾选",
-      "检查 pandoc + browser + pdftotext + latex，缺了告诉用户怎么装",
-      "按 conversion_rules 逐文件转换",
-      "drawio → MCP 导出 PNG+SVG → .md 引用替换 → 图随文档",
-      "写回 task.md 的「执行结果」",
+      "检查 document-skills 插件可用性",
+      "按 7 阶段流水线执行：环境检查 → 扫描 → 解压 → 读 task.md → 预处理 → 委托转换 → 汇报",
       "按 reporting.template 输出汇报"
     ],
 
+    "archive_extraction": {
+      "enabled": true,
+      "formats": {
+        "zip": "Python zipfile (stdlib) — 始终可用",
+        "rar": "unrar 或 7z 命令（缺失则提示用户安装 unrar）",
+        "7z": "7z 命令（缺失则提示用户安装 p7zip-full）"
+      },
+      "output_dir": "./extracted/",
+      "post_extract": "重新扫描 extracted/ 目录并将文档加入处理队列",
+      "edge_cases": {
+        "nested_archives": "列出但不递归解压（安全考虑）",
+        "password_protected": "报告「有密码保护，请手动解压后放入目录」",
+        "empty_archive": "跳过并提示",
+        "windows_gbk_zip": "尝试 cp936 编码解码文件名"
+      }
+    },
+
+    "chinese_formatting": {
+      "paper_size": "A4",
+      "margins": {"top": "2.54cm", "bottom": "2.54cm", "left": "3.17cm", "right": "3.17cm"},
+      "line_spacing": 1.5,
+      "fonts": {
+        "body_cn": "宋体 (SimSun) 小四 12pt",
+        "heading_cn": "黑体 (SimHei) 三号 16pt / 四号 14pt",
+        "body_en": "Times New Roman 12pt",
+        "code": "Consolas / Courier New 等宽 10.5pt"
+      },
+      "text_color": "#000000 (纯黑)",
+      "heading_numbering": "第一章 / 1.1 / 1.1.1 自动编号",
+      "paragraph": "首行缩进 2 字符",
+      "table_style": "三线表，表头加粗浅灰底色",
+      "code_block": "等宽字体，浅灰背景(#f5f5f5)，语法高亮保留",
+      "formula": "$$...$$ → OMML 可编辑格式（非图片），失败则降级为图片"
+    },
+
     "context_rules": {
-      "md_files": "全文读入上下文 — 读完整个 .md 便于后续处理",
-      "drawio_files": "全文读入上下文 — 需要检查图表内部引用",
-      "docx_doc_files": "agent 无法直接读取！先 pandoc 转 .md → 全文读入理解内容",
-      "pdf_files": "agent 无法直接读取！先 pdftotext 转 .md → 全文读入理解内容",
-      "pre_convert": "扫描到 .docx/.doc/.pdf 后，必须先转为临时 .md 再读。不要只记文件名！",
-      "skill_json": "全文读入 — 获取转换规则和汇报模板",
-      "task_md": "全文读入 — 理解用户需求。只读不写！task.md 是任务指令，作业内容写到新文件。"
+      "md_files": "全文读入上下文",
+      "docx_doc_files": "委托 docx skill 提取文字后读入",
+      "pdf_files": "委托 pdf skill 提取文字和表格后读入",
+      "pptx_files": "委托 pptx skill 提取文字后读入",
+      "xlsx_csv_files": "委托 xlsx skill 读取结构和前 20 行后理解数据",
+      "archive_files": "检测并解压 → 扫描提取内容 → 将文档加入队列",
+      "task_md": "全文读入。只读不写！",
+      "skill_json": "全文读入获取配置"
     },
     "task_md_readonly": {
       "rule": "task.md 是用户的任务指令文件，永远不要修改它",
       "why": "用户把自己的需求写在 task.md 里，agent 读了之后去执行。修改 task.md 会丢失用户的原始指令。",
-      "do_instead": ["新建 .md 文件写作业内容", "在 task.md 的「执行结果」区域写汇报", "不要在 task.md 的「我的任务」之外写内容"]
-    },
-
-    "no_task_md_behavior": {
-      "when": "task.md 的「我的任务」仍是模板占位文字",
-      "action": "打印文件清单 + 类型图标，说「请把要转换的文件填到 task.md 的『我的任务』里，勾上要转的格式，然后说 执行」",
-      "example": "📄 找到了 3 个文件:\n  📄 report.md (18KB)\n  📄 slides.docx (2.3MB)\n  📊 flow.drawio (45KB)\n\n请把要转换的文件填到 task.md，然后说「执行」"
-    },
-
-    "has_task_md_behavior": {
-      "when": "task.md 的「我的任务」有具体文件名和勾选",
-      "action": "直接按勾选执行转换，无需再问"
+      "do_instead": ["新建 .md 文件写作业内容", "在 task.md 的「执行结果」区域写汇报"]
     }
   },
 
-  "update": {
-    "mechanism": "git pull",
-    "check_command": "python md2docx_pdf.py --update",
-    "description": "自动检查 GitHub 仓库是否有新版本，有则 git pull 更新",
-    "auto_check_on_start": true,
-    "instructions": "每次启动时打印当前版本，如果远端有新版本则提示用户运行 --update"
-  },
-
-  "diagram_pipeline": {
-    "description": "DOCX 无法渲染 Mermaid 代码块，图表必须先导出为 PNG 再嵌入。",
-    "priority": ["mermaid_first", "drawio_fallback"],
-    "rules": {
-      "mermaid": {
-        "when": "简单图表：流程图、旅程图、简单架构图（节点<20）",
-        "render": "mermaid.ink API → PNG",
-        "method": "base64(zlib(mermaid_code)) → https://mermaid.ink/img/{encoded}",
-        "script": "python md2docx_pdf.py file.md --render-mermaid"
-      },
-      "drawio": {
-        "when": "复杂图表：架构全景、多层嵌套、手绘风格、UI草图",
-        "render": "DrawIO MCP export_diagram → PNG + SVG",
-        "keep_source": true,
-        "keep_source_reason": "保留 .drawio 源文件在本地，方便以后修改"
-      }
-    },
-    "mandatory_post_process": [
-      "1. 所有 Mermaid 代码块必须替换为 ![](xxx.png)",
-      "2. 所有 .drawio 引用必须替换为 ![](xxx.png)",
-      "3. 每张图下方加图注（**图N** 说明文字）",
-      "4. 确认替换完毕后再运行 pandoc 转换",
-      "5. 转换完检查 DOCX 中图片是否正常显示"
-    ],
-    "cli_flag": "--render-mermaid  自动扫描 .md → 渲染 Mermaid 块 → 替换引用 → 转换"
+  "document_skills_delegation": {
+    "md_to_docx": "使用 docx skill 将 Markdown 转换为 Word 文档，按中文格式要求排版",
+    "md_to_pdf": "先将 MD 转为 DOCX，再用 pdf skill 将 DOCX 转为 PDF",
+    "md_to_pptx": "使用 pptx skill 将 Markdown 内容生成演示文稿",
+    "docx_to_md": "使用 docx skill 提取 Word 文档的完整文字内容，保存为 Markdown",
+    "docx_to_pdf": "使用 pdf skill 将 DOCX 转换为 PDF",
+    "pdf_to_md": "使用 pdf skill 提取 PDF 的完整文字和表格，保存为 Markdown",
+    "pdf_to_docx": "先用 pdf skill 提取文字为 Markdown，再用 docx skill 生成 DOCX",
+    "csv_xlsx_analysis": "使用 xlsx skill 读取数据，分析结构和内容，生成分析报告",
+    "docx_black_text": "转换后执行: python helpers/black_text.py <output.docx>"
   },
 
   "conversion_rules": {
-    ".md": "→ .docx + .pdf。先走 diagram_pipeline 把图表转 PNG 替换引用，再转换。",
-    ".docx": "→ .md + .pdf",
-    ".doc": "→ .md + .pdf",
-    ".pdf": "→ .md + .docx (pdftotext 提取文字 → md → docx)",
-    ".tex": "→ .pdf (需要 xelatex/pdflatex，可选)",
-    ".drawio": "→ .png + .svg (drawio MCP: export_diagram)"
+    ".md": "→ .docx + .pdf（委托 docx skill + pdf skill）",
+    ".md": "→ .pptx（委托 pptx skill，如 task.md 要求）",
+    ".docx": "→ .md + .pdf（委托 docx skill + pdf skill）",
+    ".doc": "→ .md + .pdf（委托 docx skill + pdf skill）",
+    ".pdf": "→ .md + .docx（委托 pdf skill + docx skill）",
+    ".pptx": "→ .md（委托 pptx skill 提取文字）",
+    ".xlsx": "→ 分析报告 .md + .docx（委托 xlsx skill + docx skill）",
+    ".csv": "→ 分析报告 .md + .docx（委托 xlsx skill + docx skill）",
+    ".tex": "→ .pdf（委托 pdf skill，尽力而为）",
+    ".drawio": "→ .png + .svg（DrawIO MCP export_diagram）",
+    ".zip / .rar / .7z": "→ 解压 → 扫描文档 → 加入处理队列"
   },
 
-  "mcp_integration": {
+  "diagram_pipeline": {
+    "description": "Mermaid 代码块在 DOCX 中无法渲染，必须先将图表导出为 PNG 再嵌入。",
+    "priority": ["mermaid_first", "drawio_fallback"],
+    "mermaid": {
+      "when": "流程图、旅程图、简单架构图（节点<20）",
+      "render": "mermaid.ink API → PNG",
+      "method": "base64(mermaid_code) → https://mermaid.ink/img/{encoded}",
+      "script": "python helpers/render_mermaid.py <file.md> --output-dir ./output",
+      "supported_types": ["graph", "flowchart", "journey", "sequenceDiagram", "gantt", "pie", "classDiagram", "stateDiagram", "erDiagram"]
+    },
     "drawio": {
-      "description": "检测到 .drawio 文件时，agent 必须保留源文件并导出图片嵌入文档。",
-      "tools": ["export_diagram"],
-      "rules": [
-        "保留 .drawio 源文件不动 (方便以后编辑)",
-        "调用 export_diagram 导出为 .png (高分辨率) 和 .svg (矢量)",
-        "导出文件放到源文件同目录，命名为 <原名>.png 和 <原名>.svg",
-        "如果 .md 中有 ![](xxx.drawio)，替换为 ![](xxx.png)",
-        "转 .docx 和 .pdf 时，图片路径会被 pandoc 自动解析并嵌入文档",
-        "最终交付：三种格式 (.md + .docx + .pdf) 都包含图表"
-      ],
-      "workflow": [
-        "1. 扫描找到所有 .drawio 文件",
-        "2. 对每个 .drawio 调 MCP export_diagram → PNG + SVG",
-        "3. 更新 .md 中的图片引用 (xxx.drawio → xxx.png)",
-        "4. python md2docx_pdf.py -y *.md  (转 .docx + .pdf)",
-        "5. 确认导出的 PNG/SVG 在 .docx 和 .pdf 中可见"
-      ]
+      "when": "复杂架构全景、多层嵌套、手绘风格、UI草图",
+      "render": "DrawIO MCP export_diagram → PNG + SVG",
+      "keep_source": true,
+      "keep_source_reason": "保留 .drawio 源文件在本地，方便以后修改"
     }
   },
 
   "reporting": {
-    "description": "所有任务完成后，agent 必须输出结构化汇报。格式如下：",
+    "description": "所有任务完成后，agent 必须输出结构化汇报。",
     "required_sections": ["已完成", "未完成", "遇到的问题", "输出文件清单"],
-    "template": "## 📋 转换汇报\n\n### ✅ 已完成\n- (逐条列出完成的项目)\n\n### ❌ 未完成\n- (如有，说明原因)\n\n### ⚠️ 遇到的问题\n- (如有报错/警告/跳过的文件)\n\n### 📁 输出文件\n| 源文件 | 输出 | 大小 | 状态 |\n|--------|------|------|------|\n| xxx.md | xxx.docx | 23KB | OK |\n| xxx.md | xxx.pdf | 650KB | OK |\n\n如果一切顺利没有失败，在汇报末尾加一句：**「全部转换完成，没有失败。」**"
+    "template": "## 📋 处理汇报\n\n### ✅ 已完成\n- (逐条列出完成的项目)\n\n### ❌ 未完成\n- (如有，说明原因)\n\n### ⚠️ 遇到的问题\n- (如有报错/警告/跳过的文件)\n\n### 📁 输出文件\n| 源文件 | 输出 | 大小 | 状态 |\n|--------|------|------|------|\n| xxx.md | xxx.docx | 23KB | OK |\n\n如果一切顺利没有失败，在汇报末尾加一句：**「全部处理完成，没有失败。」**"
   },
 
-  "usage": {
-    "install": "git clone https://github.com/cowhorse05/DocWizard.git && cd DocWizard && python md2docx_pdf.py --setup",
-    "setup": "python md2docx_pdf.py --setup   交互式设置向导，选择安装可选组件",
-    "scan_mode": "python md2docx_pdf.py           扫描目录，交互式互转",
-    "lazy_mode": "python md2docx_pdf.py -y        跳过询问，直接全转",
-    "with_drawio": "python md2docx_pdf.py -y --drawio  含图表导出",
-    "single_file": "python md2docx_pdf.py file.md  单文件互转",
-    "update": "python md2docx_pdf.py --update     检查并更新到最新版本"
+  "update": {
+    "mechanism": "git pull origin main",
+    "description": "在 .claude/skills/DocWizard/ 下执行 git pull 即可更新到最新版本"
   }
 }

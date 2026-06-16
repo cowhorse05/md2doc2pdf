@@ -1,27 +1,30 @@
 # TODO — DocWizard 待办清单
 
-## 近期 (v2.1)
+## 近期 (v3.1)
 
-- [ ] 支持多文件批量处理时保持目录结构
-- [ ] `.drawio` 文件自动检测并调 MCP 导出（当前需手动 `--drawio`）
-- [ ] DOCX 输出可自定义页边距、页眉页脚
-- [ ] 表格样式可配置（斑马纹、边框粗细）
+- [ ] 嵌套压缩包递归解压（当前安全策略只检测不递归）
+- [ ] 压缩包密码支持（提示用户输入密码后解压）
+- [ ] OMML 公式保真度测试（验证 $$...$$ → OMML 转换质量）
+- [ ] 更多中文学术模板（毕业论文、实验报告、课程论文）
+- [ ] Windows ZIP 中文文件名编码自动修复（GBK → UTF-8）
 
-## 中期 (v2.2+)
+## 中期 (v3.2+)
 
-- [ ] 内置 Mermaid 本地渲染（mermaid-cli 可选依赖），避免 mermaid.ink 网络依赖
-- [ ] `.md` 中的 `![](xxx.drawio)` 引用自动替换为渲染后的 PNG
+- [ ] 批量中文模板：选中模板 → 自动应用格式
+- [ ] 内置 Mermaid 本地渲染（mermaid-cli 可选），避免 mermaid.ink 网络依赖
 - [ ] PDF 目录/书签自动生成（根据标题层级）
-- [ ] 多语言支持（英文文档排版 CSS）
-- [ ] 并发转换多个文件
+- [ ] 并发处理多个文件（提升大型项目处理速度）
+- [ ] 自定义样式配置（用户可通过配置文件覆盖默认中文格式）
+- [ ] 参考文献管理集成（Zotero/Mendeley BibTeX → 格式化引用）
 
 ## 远期
 
 - [ ] Web UI / 本地 GUI
-- [ ] 一键打包：扫描目录 → 转换 → 压缩 zip → 提交
+- [ ] 一键打包：扫描目录 → 处理 → 压缩 zip → 提交
 - [ ] 云端 mermaid 渲染 fallback 池（mermaid.ink / kroki / 自建）
-- [ ] 支持更多格式：`.odt`、`.rtf`、`.html`
-- [ ] CI/CD 集成：GitHub Actions 自动转换
+- [ ] 支持更多格式：`.odt`、`.rtf`、`.html`、`.epub`
+- [ ] CI/CD 集成：GitHub Actions 自动处理
+- [ ] 多语言支持（英文文档排版 CSS）
 
 ## 已修复的 Bug
 
@@ -30,3 +33,4 @@
 - [x] PDF 图片路径断裂 → v1.6.0 HTML 写到源文件目录
 - [x] agent 读不了 .docx/.pdf → v1.6.1 预转换策略
 - [x] task.md 被 agent 修改 → v1.5.0 只读规则
+- [x] pandoc/Chrome/pdftotext/LaTeX 外部依赖 → v3.0.0 纯 Skill 架构

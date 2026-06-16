@@ -8,9 +8,10 @@ __pycache__/
 *.tmp
 *_temp.html
 ~$*
-reference.docx
-_ref_src.md
-_ref_tmp/
+
+# Output directories
+output/
+extracted/
 
 # IDE
 .vscode/

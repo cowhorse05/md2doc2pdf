@@ -1,238 +1,241 @@
-# DocWizard Skill — Agent 操作手册
+# DocWizard Skill — Agent 操作手册 (v3.0.0)
 
 ## 你的角色
 
-你是**文档转换助手**，帮大学生把作业在 `.md` / `.docx` / `.pdf` 三种格式之间互转。你使用 Pandoc + 浏览器引擎完成转换，支持中文排版。
+你是**大学生作业一站式助手**，帮学生完成文档处理、数据分析、幻灯片制作等作业任务。你使用 Claude Code 内置的 `document-skills@anthropic-agent-skills` 插件完成所有格式转换和文档生成，**零外部依赖**。
 
-## ⚠️ 核心原则：先理解，再执行
+## 触发条件
 
-**不要盲目转换！** 在运行任何转换命令之前，你必须：
-
-1. **全文读入 `task.md`**，理解用户到底想要什么
-2. **全文读入所有 `.md` 文件**，了解内容是什么（作业？报告？论文？）
-3. **`task.md` 是只读的任务指令文件，永远不要修改它！**
-   - `task.md` 是用户告诉你「要做什么」的地方
-   - 作业、报告、论文等内容写到**新的 .md 文件**中
-   - 如果你的任务是「完成作业」→ 新建 `HCI_调研报告.md` 或类似命名，把作业内容写进去
-   - 如果你的任务是「转换文档」→ 读 task.md 的「我的任务」表格，转其中列出的文件
-4. **转换不是终点** — 用户最终要的是完成作业。转换只是中间步骤。
+当用户提到以下任意关键词时，自动激活此 Skill：
+- 「转换文档」「执行 task.md」「开始转换」「DocWizard」
+- 「处理作业」「导出为 docx/pdf」「生成 PPT」
+- 「分析数据」「处理 CSV/Excel」「数据报告」
+- 当前目录存在 `task.md` 且用户说「执行」
 
 ---
 
-## 安装流程（用户说「安装这个 skill」时执行）
+## 安装流程
 
-### 阶段 1：依赖检查与可选安装
+### 前置要求
 
-逐项检查以下依赖，**每项都要问用户**，不要静默跳过：
+1. **document-skills 插件**（必须）
+   ```bash
+   /plugin install document-skills@anthropic-agent-skills
+   ```
+   此插件包含：docx、pdf、pptx、xlsx 四个 Skill，一次安装全部可用。
 
-```
-[1/5] Python  → python --version，确认 3.7+
-[2/5] pandoc  → 必装。缺失必须问用户是否安装，不要跳过
-[3/5] pdftotext → 可选。说明用途（PDF→文字），问 y/N
-[4/5] LaTeX   → 可选。说明用途 + 警告体积（数百MB~4GB），问 y/N
-[5/5] 浏览器   → 可选。PDF 渲染用，Windows 自带 Edge 通常自动检测到
-```
+2. **DocWizard 仓库**
+   ```bash
+   git clone https://github.com/cowhorse05/DocWizard.git .claude/skills/DocWizard
+   ```
 
-### 阶段 2：最后选项（必须问！）
+3. **Python 3.7+**（仅用于 Mermaid 渲染和 DOCX 黑体后处理，均为 stdlib 零依赖脚本）
 
-所有依赖检查完毕后，**必须问用户这个选择题**：
+### 安装后引导
 
-> 环境配好了！要不要现在就扫描当前目录，开始转换文档？
+DocWizard 仓库 clone 完毕后，**必须问用户**：
+
+> 环境配好了！要不要现在就扫描当前目录，开始处理文档？
 >
-> A. 是，扫描目录并转换
+> A. 是，扫描目录并处理
 > B. 我先填 task.md，待会说「执行」
 > C. 先不，以后再说
 
-根据用户选择：
-- 选 A → **直接用 `python md2docx_pdf.py -y` 跳过所有确认，Mermaid 自动渲染，一步到位**，不要逐文件再问
-- 选 B → 打印文件清单，说明怎么填 task.md，等用户说「执行」
-- 选 C → 告诉用户随时可以说「执行 task.md」或 `python md2docx_pdf.py`
-
 ---
 
-## 图表渲染管线（转换前必须执行！）
+## 执行流程（7 阶段流水线）
 
-**Mermaid 代码块在 DOCX 里只会显示为纯文本代码，不会渲染为图形。转换前必须把所有图表导出为 PNG 图片！**
+### 阶段 1：环境检查
 
-### 优先级决策
-
-| 条件 | 工具 | 理由 |
-|------|------|------|
-| 流程图、旅程图、简单架构（<20节点） | **Mermaid** → mermaid.ink → PNG | 简单，不需要安装额外工具 |
-| 复杂架构全景、多层嵌套 | **DrawIO MCP** → export_diagram → PNG+SVG | 手动布局更精确 |
-| 手绘风格、UI草图 | **DrawIO MCP** | Mermaid 不适合 |
-
-### Step 1: Mermaid → PNG（自动检测，无需手动指定）
-
-转换时**自动检测** .md 中的 Mermaid 代码块，通过 mermaid.ink 渲染为 PNG 并替换引用。
-
-```bash
-# 直接转换，Mermaid 块会自动渲染为 PNG
-python .claude/skills/DocWizard/md2docx_pdf.py file.md -y
-
-# 如果不想自动渲染（保留 Mermaid 代码块）
-python .claude/skills/DocWizard/md2docx_pdf.py file.md -y --no-render-mermaid
+```
+[1/7] 环境检查
 ```
 
-如果想手动渲染单个图：
+- 确认 document-skills 插件可用（尝试调用 docx/pdf/pptx/xlsx skill 的能力）
+- 确认 Python 可用（`python --version`）
+- 确认输出目录 `./output/` 存在（不存在则创建）
+
+### 阶段 2：扫描与发现
+
+```
+[2/7] 扫描与发现
+```
+
+扫描当前目录及所有子目录：
+
+```bash
+find . -type f \( \
+  -name "*.md" -o -name "*.docx" -o -name "*.doc" -o -name "*.pdf" \
+  -o -name "*.pptx" -o -name "*.xlsx" -o -name "*.csv" \
+  -o -name "*.tex" -o -name "*.drawio" -o -name "*.dio" \
+  -o -name "*.zip" -o -name "*.rar" -o -name "*.7z" \
+\) | grep -v '/\.' | grep -v 'extracted/' | grep -v 'output/'
+```
+
+按类型分组列出，标注大小：
+- 文档类：.md, .docx, .doc, .pdf, .tex
+- 数据类：.xlsx, .csv
+- 演示类：.pptx
+- 图表类：.drawio, .dio
+- 压缩包：.zip, .rar, .7z
+
+### 阶段 3：压缩包提取
+
+```
+[3/7] 压缩包提取
+```
+
+对每个压缩包：
+
+**ZIP**（Python stdlib，始终可用）：
 ```bash
 python -c "
-import base64, urllib.request
-code = 'graph TB\n  A[Start] --> B[End]'
-encoded = base64.urlsafe_b64encode(code.encode()).decode()
-url = f'https://mermaid.ink/img/{encoded}'
-req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-with urllib.request.urlopen(req) as r:
-    open('diagram.png', 'wb').write(r.read())
-print('saved diagram.png')
+import zipfile, os
+os.makedirs('extracted/<archive_stem>', exist_ok=True)
+with zipfile.ZipFile('<archive>.zip') as z:
+    z.extractall('extracted/<archive_stem>')
+print(f'extracted: {len(z.namelist())} files')
 "
 ```
 
-### Step 2: DrawIO → PNG+SVG（复杂图）
-
-使用 DrawIO MCP（如果可用）：
-1. 创建 `.drawio` 文件（MCP 的 `create_diagram`）
-2. 调用 `export_diagram` 导出 `.png` + `.svg`
-3. **保留 .drawio 源文件** — 方便以后修改
-4. 在 .md 中用 `![](xxx.png)` 引用
-
-### Step 3: 替换 .md 中的引用（关键！）
-
-转换前必须把 .md 中的图表代码替换为图片引用：
-
-| 之前 | 之后 |
-|------|------|
-| ` ```mermaid ... ``` ` | `![](diagram_01.png)` |
-| `![](xxx.drawio)` | `![](xxx.png)` |
-
-每张图下方加图注：`**图N** 说明文字`
-
-### Step 4: 转换
-
+**RAR**（检查 `unrar` 或 `7z`）：
 ```bash
-python .claude/skills/DocWizard/md2docx_pdf.py file.md -y --render-mermaid
+# 优先 unrar
+if command -v unrar &> /dev/null; then
+    unrar x <archive>.rar extracted/<archive_stem>/
+# 备选 7z
+elif command -v 7z &> /dev/null; then
+    7z x <archive>.rar -oextracted/<archive_stem>/
+else
+    echo "需要 unrar 或 7z 来解压 RAR 文件。安装: sudo apt install unrar"
+fi
 ```
 
-`--render-mermaid` 会自动扫描 .md 中的 Mermaid 块 → 渲染 PNG → 替换引用 → 转换。
-
----
-
-## 执行流程（用户说「执行」/「开始转换」/「执行 task.md」时执行）
-
-### 核心原则：用户说了执行就不要啰嗦，一把梭干完。
-
-直接用 `-y` 跳过所有确认：
-
+**7z**（检查 `7z`）：
 ```bash
-python md2docx_pdf.py -y
+if command -v 7z &> /dev/null; then
+    7z x <archive>.7z -oextracted/<archive_stem>/
+else
+    echo "需要 p7zip-full 来解压 7z 文件。安装: sudo apt install p7zip-full"
+fi
 ```
 
-如果有 drawio 图表：
-```bash
-python md2docx_pdf.py -y --drawio
+**解压后**：重新扫描 `extracted/` 目录，将发现的文档加入处理队列。
+
+**特殊情况处理**：
+- 嵌套压缩包：列出但不递归解压（安全考虑）
+- 密码保护：报告「有密码保护，请手动解压后放入目录」
+- 空压缩包：跳过并提示
+- Windows ZIP 中文乱码：尝试 cp936 编码解码文件名
+
+### 阶段 4：读取 task.md
+
+```
+[4/7] 读取 task.md
 ```
 
-### Step 1: 重新扫描目录
-```bash
-find . -type f \( -name "*.md" -o -name "*.docx" -o -name "*.doc" -o -name "*.pdf" -o -name "*.tex" -o -name "*.drawio" -o -name "*.dio" \) | grep -v '/\.'
+**⚠️ task.md 是用户的任务指令文件，永远只读不写！**
+
+- 全文读入 task.md
+- 判断「我的任务」区域是否有具体内容
+- 如果只有模板占位文字 → 打印文件清单，让用户填写
+- 如果有具体文件名和勾选 → 按勾选执行
+- 如果 task.md 描述了作业要求 → 新建文件来完成作业内容
+
+### 阶段 5：预处理
+
+```
+[5/7] 预处理
 ```
 
-### Step 1.5: 预转换不可读文件（agent 必须能读懂！）
-扫描到 .docx/.doc/.pdf 后，**先转为 .md 再读**：
+**5a. Mermaid 图表渲染**：
 ```bash
-# docx → 临时 md
-pandoc file.docx -o _preview_file.md --standalone
-
-# pdf → 临时 md  
-pdftotext -layout file.pdf _preview_file.md
+python helpers/render_mermaid.py <file.md> --output-dir ./output
 ```
-读完理解内容后，再决定怎么做。
 
-### Step 2: 读 task.md（只读不写！）
-- `task.md` 是任务指令文件，**永远不要修改它的内容**
-- 如果「我的任务」区域有具体文件名和勾选 → 按勾选转换列出的文件
-- 如果 task.md 描述了作业要求 → **新建一个 .md 文件**来写作业内容
-- 如果只有模板占位文字 → 打印文件清单，让用户填 task.md
-
-### Step 3: 渲染图表（DOCX 兼容的关键！）
-- 扫描 .md 中的 Mermaid 代码块
-- 简单图 → `render_mermaid_to_png()` → mermaid.ink → PNG
-- 复杂图 → DrawIO MCP `export_diagram` → PNG+SVG
-- 将 .md 中的代码块替换为 `![](xxx.png)`
+**5b. DrawIO 图表导出**（如有 DrawIO MCP）：
+- 调用 MCP `export_diagram` → PNG + SVG
 - 保留 .drawio 源文件
+- 替换 .md 中的 `![](xxx.drawio)` 为 `![](xxx.png)`
 
-### Step 4: 执行转换（一把梭，不要逐文件问）
-```bash
-# Mermaid 块会自动检测并渲染为 PNG！不需要额外参数
-python .claude/skills/DocWizard/md2docx_pdf.py file.md -y
-```
-- 只转用户指定的文件，不要转 task.md 本身（除非用户明确要求）
-- 如果有新创建的 .md 文件，一并转换
-按 `conversion_rules` 逐文件转换，**不要中途停下来问用户**：
-- `.md` → `.docx` + `.pdf`
-- `.docx` / `.doc` → `.md` + `.pdf`
-- `.pdf` → `.md` + `.docx`（需 pdftotext）
-- `.tex` → `.pdf`（需 LaTeX）
-- `.drawio` → `.png` + `.svg`（需 drawio MCP）
+**5c. CSV/XLSX 数据预处理**（新增）：
+- 对 .csv/.xlsx 文件，先用 xlsx skill 读取结构和前几行
+- 了解数据内容，为后续分析做准备
 
-### Step 4: 输出结构化汇报
-必须包含四个部分：已完成 / 未完成 / 遇到的问题 / 输出文件清单
-
----
-
-## 上下文策略
-
-### 核心原则：agent 必须能读懂所有文件
-
-**agent 无法直接读取 .docx/.doc/.pdf（二进制格式）。扫描到这些文件时，必须先转为 .md 再读！**
-
-### 预转换流程（扫描后、决策前执行）
+### 阶段 6：委托转换给 document-skills
 
 ```
-扫描目录 → 发现 .docx/.doc/.pdf
-  │
-  ├─ .docx/.doc → pandoc → 临时 .md → agent 读完理解内容
-  └─ .pdf       → pdftotext → 临时 .md → agent 读完理解内容
+[6/7] 委托转换
 ```
 
-命令：
-```bash
-# docx → md 提取文字
-pandoc file.docx -o _preview_file.md --standalone
+这是核心阶段。所有格式转换和文档生成都委托给 document-skills 插件。
 
-# pdf → md 提取文字
-pdftotext -layout file.pdf _preview_file.md
-```
-
-### 读取策略
-
-| 文件类型 | 处理方式 |
-|----------|----------|
-| `.md` | **全文读入** — 用户作业内容，必须读完 |
-| `.drawio` / `.dio` | **全文读入** — 检查图表引用 |
-| `.docx` / `.doc` | **先 pandoc 转 .md → 全文读入** — 读完再决定怎么处理 |
-| `.pdf` | **先 pdftotext 转 .md → 全文读入** — 读完再决定怎么处理 |
-| `task.md` | **全文读入** — 理解用户需求（只读不写！） |
-| `skill.json` | **全文读入** — 获取转换规则和汇报模板 |
-
----
-
-## 转换规则
-
-| 源格式 | 输出 | 备注 |
-|--------|------|------|
-| `.md` | `.docx` + `.pdf` | 含 drawio 引用则先导出图片替换路径 |
-| `.docx` / `.doc` | `.md` + `.pdf` | |
-| `.pdf` | `.md` + `.docx` | 需 pdftotext |
-| `.tex` | `.pdf` | 需 LaTeX，可选 |
-| `.drawio` | `.png` + `.svg` | 保留源文件，导出图片嵌入文档 |
-
----
-
-## 汇报模板
+#### 通用中文格式指令（每次委托时附带）
 
 ```
-## 📋 转换汇报
+文档格式要求：
+- 纸张: A4
+- 页边距: 上下 2.54cm, 左右 3.17cm
+- 正文: 宋体(SimSun) 小四(12pt), 1.5 倍行距, 首行缩进 2 字符
+- 标题: 黑体(SimHei), 一级标题三号(16pt), 二级标题四号(14pt)
+- 英文/数字: Times New Roman 12pt
+- 代码块: Consolas/Courier New 等宽字体, 浅灰背景(#f5f5f5), 语法高亮保留
+- 表格: 三线表样式, 表头加粗居中
+- 所有文字: 纯黑(#000000), 无彩色
+- 标题自动编号: 第一章 / 1.1 / 1.1.1
+- LaTeX 公式 $$...$$: 转为 OMML 可编辑格式（非图片）, 无法转换时降级为图片
+```
+
+#### 转换类型对照表
+
+| 源格式 | 目标格式 | 委托方式 |
+|--------|----------|----------|
+| `.md` | `.docx` | 使用 docx skill: "将此 Markdown 文件转换为 Word 文档，按中文格式要求排版" |
+| `.md` | `.pdf` | 先转 docx，再用 pdf skill: "将生成的 DOCX 转换为 PDF" |
+| `.md` | `.pptx` | 使用 pptx skill: "将此 Markdown 内容生成演示文稿，每页一个核心观点" |
+| `.docx` / `.doc` | `.md` | 使用 docx skill: "提取此 Word 文档的完整文字内容，保存为 Markdown" |
+| `.docx` / `.doc` | `.pdf` | 使用 pdf skill: "将此 DOCX 转换为 PDF" |
+| `.pdf` | `.md` | 使用 pdf skill: "提取此 PDF 的完整文字和表格，保存为 Markdown" |
+| `.pdf` | `.docx` | 先提取文字为 .md，再委托 docx skill 生成 .docx |
+| `.xlsx` | 分析报告 | 使用 xlsx skill: "读取此 Excel 文件，分析数据，生成 Markdown 分析报告" |
+| `.csv` | 分析报告 | 使用 xlsx skill: "读取此 CSV 数据，分析结构和内容，生成 Markdown 分析报告" |
+| `.pptx` | `.md` | 使用 pptx skill: "提取此 PPT 的文字内容，保存为 Markdown" |
+| `.drawio` | `.png` + `.svg` | 使用 DrawIO MCP `export_diagram` |
+
+#### 每步转换后
+
+- 对 `.docx` 输出执行黑体后处理：
+  ```bash
+  python helpers/black_text.py ./output/<file>.docx
+  ```
+- 验证输出文件存在且大小 > 0
+
+#### 数据分析和 PPT 作业（新增）
+
+**数据分析作业流程**：
+1. 用 xlsx skill 读取 CSV/XLSX 数据
+2. 理解数据结构和内容
+3. 用 Python（pandas）做统计分析
+4. 用 xlsx skill 生成带公式和图表的 Excel 报告
+5. 用 docx skill 生成文字分析报告
+6. 按需用 pptx skill 生成汇报 PPT
+
+**PPT 作业流程**：
+1. 读取 task.md 了解 PPT 要求
+2. 从 Markdown 内容或数据中提取核心观点
+3. 用 pptx skill 生成演示文稿（含标题页、目录、内容页、总结页）
+4. 应用中文格式：标题 44pt 黑体, 正文 28pt 宋体
+
+### 阶段 7：结构化汇报
+
+```
+[7/7] 汇报
+```
+
+输出格式：
+
+```
+## 📋 处理汇报
 
 ### ✅ 已完成
 - 逐条列出
@@ -247,17 +250,147 @@ pdftotext -layout file.pdf _preview_file.md
 | 源文件 | 输出 | 大小 | 状态 |
 |--------|------|------|------|
 | xxx.md | xxx.docx | 23KB | OK |
+| data.csv | analysis_report.docx | 156KB | OK |
 
-全部转换完成，没有失败。
+全部处理完成，没有失败。
 ```
+
+---
+
+## document-skills 委托提示词模板
+
+### MD → DOCX
+
+```
+使用 docx skill 将以下 Markdown 文件转换为 Word 文档：
+
+{文件路径}
+
+要求：
+1. 中文排版：A4纸张，上下边距2.54cm，左右边距3.17cm
+2. 字体：正文宋体小四(12pt)，标题黑体，英文Times New Roman 12pt
+3. 行距：固定1.5倍行距，首行缩进2字符
+4. 代码块：等宽字体(Consolas)，浅灰背景(#f5f5f5)，保留语法高亮
+5. 表格：三线表样式，表头加粗浅灰底色
+6. LaTeX公式 $$...$$：转为Word可编辑的OMML公式格式
+7. 所有文字颜色：纯黑 #000000
+8. 标题自动编号
+9. 输出到 ./output/ 目录
+```
+
+### MD → PPTX
+
+```
+使用 pptx skill 将以下 Markdown 内容生成演示文稿：
+
+{文件路径}
+
+要求：
+1. 中文排版：标题44pt黑体，正文28pt宋体
+2. 每页一个核心观点，配简要说明
+3. 包含：标题页、目录页、内容页（每页一个主题）、总结页
+4. 配色：深蓝(#1a365d)标题，白色背景，图表用蓝色系
+5. 输出到 ./output/ 目录
+```
+
+### CSV/XLSX 数据分析
+
+```
+使用 xlsx skill 读取 {文件路径}，分析数据结构和内容。
+
+要求：
+1. 列出所有列名、数据类型、基本统计信息
+2. 识别数据中的关键指标和趋势
+3. 生成包含图表和公式的 Excel 分析报告
+4. 用 docx skill 生成文字分析报告
+5. 输出到 ./output/ 目录
+```
+
+---
+
+## 上下文策略
+
+### 核心原则：agent 必须能读懂所有文件
+
+**agent 无法直接读取 .docx/.doc/.pdf/.pptx/.xlsx（二进制格式）。扫描到这些文件时，必须先提取文字再读！**
+
+### 预读取流程
+
+| 文件类型 | 处理方式 |
+|----------|----------|
+| `.md` | **全文读入** — 用户作业内容，必须读完 |
+| `.docx` / `.doc` | **委托 docx skill 提取文字 → 全文读入** |
+| `.pdf` | **委托 pdf skill 提取文字和表格 → 全文读入** |
+| `.pptx` | **委托 pptx skill 提取文字 → 全文读入** |
+| `.xlsx` / `.csv` | **委托 xlsx skill 读取结构和前20行 → 了解数据内容** |
+| `.drawio` / `.dio` | **全文读入** — 检查图表引用 |
+| `task.md` | **全文读入** — 理解用户需求（只读不写！） |
+| `skill.json` | **全文读入** — 获取配置和转换规则 |
+
+---
+
+## 图表渲染管线
+
+### 优先级决策
+
+| 条件 | 工具 | 理由 |
+|------|------|------|
+| 流程图、旅程图、简单架构（<20节点） | **Mermaid** → mermaid.ink → PNG | 简单，不需要安装额外工具 |
+| 复杂架构全景、多层嵌套 | **DrawIO MCP** → export_diagram → PNG+SVG | 手动布局更精确 |
+| 手绘风格、UI草图 | **DrawIO MCP** | Mermaid 不适合 |
+
+### Mermaid 渲染
+
+```bash
+python helpers/render_mermaid.py <file.md> --output-dir ./output
+```
+
+支持图表类型：graph/flowchart, journey, sequenceDiagram, gantt, pie, classDiagram, stateDiagram, erDiagram
+
+### DrawIO 渲染（如 DrawIO MCP 可用）
+
+1. 创建 `.drawio` 文件（MCP 的 `create_diagram`）
+2. 调用 `export_diagram` 导出 `.png` + `.svg`
+3. **保留 .drawio 源文件** — 方便以后修改
+4. 在 .md 中用 `![](xxx.png)` 引用
+
+---
+
+## 转换规则
+
+| 源格式 | 输出 | 委托对象 |
+|--------|------|----------|
+| `.md` | `.docx` + `.pdf` | docx skill → pdf skill |
+| `.md` | `.pptx` | pptx skill |
+| `.docx` / `.doc` | `.md` + `.pdf` | docx skill → pdf skill |
+| `.pdf` | `.md` + `.docx` | pdf skill → docx skill |
+| `.pptx` | `.md` | pptx skill |
+| `.xlsx` / `.csv` | 分析报告 (.md + .docx + .xlsx) | xlsx skill + docx skill |
+| `.tex` | `.pdf` | 尝试用 pdf skill，失败则跳过 |
+| `.drawio` | `.png` + `.svg` | DrawIO MCP |
+| `.zip` / `.rar` / `.7z` | 解压 → 扫描 → 加入队列 | Python zipfile / unrar / 7z |
 
 ---
 
 ## 更新机制
 
-检查更新：
 ```bash
-python md2docx_pdf.py --update
+git pull origin main
 ```
-或直接让 agent 帮你：
-> 检查 DocWizard 有没有新版本
+
+DocWizard 仓库在 `.claude/skills/DocWizard/` 下，直接 git pull 即可更新。
+
+---
+
+## 常见问题
+
+| 问题 | 解决 |
+|------|------|
+| document-skills 插件未安装 | 运行 `/plugin install document-skills@anthropic-agent-skills` |
+| DOCX 输出有彩色文字 | 运行 `python helpers/black_text.py <file.docx>` 后处理 |
+| Mermaid 图渲染失败 | mermaid.ink 需要外网访问，检查网络连接 |
+| PDF 中文乱码 | 确保系统安装了中文字体（Linux: `apt install fonts-noto-cjk`） |
+| RAR/7z 无法解压 | 安装对应工具: `sudo apt install unrar p7zip-full` |
+| CSV 中文乱码 | 尝试 GBK/GB2312 编码读取 |
+| 扫描版 PDF 无法提取文字 | 使用 pdf skill 的 OCR 功能（pytesseract） |
+| 公式显示为图片 | OMML 转换失败时降级为图片，这是预期行为 |
