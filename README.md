@@ -143,12 +143,18 @@ cd .claude/skills/DocWizard && git pull origin main
 
 ## 鸣谢
 
-DocWizard 基于以下优秀的 Claude Code 技能和工具构建：
+DocWizard 基于以下优秀的 Claude Code 技能和开源项目构建：
 
 | 技能/工具 | 用途 | 来源 |
 |-----------|------|------|
 | `document-skills` | docx/pdf/pptx/xlsx 文档处理核心引擎 | [anthropics/skills](https://github.com/anthropics/skills) |
+| `academic-research-skills` | 学术写作流程参考（规划-执行模式） | [Imbad0202](https://github.com/Imbad0202) |
+| `MarkItDown` | 多格式→Markdown 转换思路参考 | [claude-scientific-writer](https://github.com/claude-scientific-writer) |
 | mermaid.ink | Mermaid 图表在线渲染 | [mermaid.ink](https://mermaid.ink) |
+| Pandoc | 文档转换引擎灵感来源 | [pandoc.org](https://pandoc.org) |
+| MinerU | PDF→Markdown 解析方案参考 | GitHub: aliceisjustplaying |
+| Docling (IBM) | 高精度表格/公式识别参考 | [DS4SD/docling](https://github.com/DS4SD/docling) |
+| python-docx | Word 文档生成方案参考 | [python-docx](https://python-docx.readthedocs.io) |
 | DrawIO MCP | 复杂图表绘制与导出 | MCP 集成 |
 | `tectonic` | LaTeX 编译引擎（推荐） | [tectonic-typesetting](https://github.com/tectonic-typesetting/tectonic) |
 
