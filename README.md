@@ -1,224 +1,320 @@
 # DocWizard
 
-> AI 驱动的作业一站式助手。说一句话，文档处理、数据分析、PPT 生成自动完成。零外部依赖，基于 Claude Code 内置 document-skills。
+> AI-powered one-stop homework assistant. One sentence — document processing, data analysis, slide generation, all done automatically. Zero external dependencies, powered by Claude Code's built-in `document-skills`.
 
-**v3.1.0** — 多 harness 适配（Claude Code / OpenCode / Codex / Cursor）+ 内容精简。
+**v3.1.0** — Multi-harness support (Claude Code / OpenCode / Codex / Cursor) + streamlined content.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Version](https://img.shields.io/badge/version-3.1.0-blue.svg)](https://github.com/cowhorse05/DocWizard)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)]()
+
+[中文文档](README.zh.md)
 
 ---
 
-## 快速开始
+## Quick Start
 
-### 1. 安装 document-skills 插件（Claude Code / OpenCode）
+### 1. Install the document-skills plugin (Claude Code / OpenCode)
 
 ```bash
 /plugin install document-skills@anthropic-agent-skills
 ```
 
-此插件一次安装包含 docx、pdf、pptx、xlsx 四个 Skill。**仅 Claude Code 和 OpenCode 支持**。Codex / Cursor 用户见[降级方案](#非-claude-code--opencode-环境)。
+This single plugin includes four skills: docx, pdf, pptx, xlsx. **Claude Code and OpenCode only.** Codex / Cursor users see [fallback guide](#non-claude-code--opencode-environments).
 
 ### 2. Clone DocWizard
 
 ```bash
-# 推荐：跨 harness 通用路径
+# Recommended: cross-harness universal path
 git clone https://github.com/cowhorse05/DocWizard.git .agents/skills/DocWizard
 
-# 或按 harness 选择：
+# Or per harness:
 # Claude Code:  .claude/skills/DocWizard
-# OpenCode:     .claude/skills/DocWizard（兼容）或 .opencode/skills/DocWizard
-# Codex:        .codex/skills/DocWizard 或 .agents/skills/DocWizard
-# Cursor:       需转换为 .cursor/rules/docwizard.mdc 格式
+# OpenCode:     .claude/skills/DocWizard (compatible) or .opencode/skills/DocWizard
+# Codex:        .codex/skills/DocWizard or .agents/skills/DocWizard
+# Cursor:       Convert to .cursor/rules/docwizard.mdc format
 ```
 
-### 3. 一句话搞定
+### 3. One Sentence
 
-把下面这句话发给 AI 编程助手：
+Send this to your AI coding assistant:
 
-> 帮我安装 DocWizard skill
+> Install DocWizard skill for me
 
-AI 会自动：
-1. 检测当前 harness（Claude Code / OpenCode / Codex / Cursor）
-2. 检查 document-skills 插件是否可用（降级环境自动切换 Python 库方案）
-3. 扫描目录发现文档、数据、压缩包
-4. 按 task.md 的勾选执行处理
-5. 输出结构化汇报
+The AI will automatically:
+1. Detect your harness (Claude Code / OpenCode / Codex / Cursor)
+2. Check document-skills plugin availability (auto-fallback to Python libraries on degraded environments)
+3. Scan the directory for documents, data, and archives
+4. Execute per `task.md` checkboxes
+5. Output a structured report
 
-### 或者直接说：
+### Or just say:
 
-> 执行 task.md
-
----
-
-## 支持的文件类型
-
-| 源格式 | 输出 | 说明 |
-|--------|------|------|
-| `.md` | `.docx` + `.pdf` | Mermaid 图表自动渲染为 PNG 嵌入 |
-| `.md` | `.pptx` | Markdown 内容生成演示文稿 |
-| `.docx` / `.doc` | `.md` + `.pdf` | 先提取文字供 AI 读取 |
-| `.pdf` | `.md` + `.docx` | 文字 + 表格提取 |
-| `.pptx` | `.md` | 提取 PPT 文字内容 |
-| `.xlsx` / `.csv` | 分析报告 (.md + .docx + .xlsx) | 数据分析 + 图表 + 报告 |
-| `.drawio` | `.png` + `.svg` | 图表导出嵌入文档 |
-| `.tex` | `.pdf` | 自动检测编译器 (tectonic/xelatex/pdflatex) |
-| `.typ` | `.pdf` + `.png` | Typst 新一代排版，增量编译、语法简洁 |
-| `.zip` / `.rar` / `.7z` | 自动解压 → 处理其中文档 | 智能识别压缩包内 Word 需求文档 |
+> Execute task.md
 
 ---
 
-## 中文学术排版
+## Supported File Types
 
-所有文档输出自动应用以下格式：
-
-- **纸张**：A4
-- **页边距**：上下 2.54cm，左右 3.17cm
-- **正文**：宋体 小四 (12pt)，1.5 倍行距，首行缩进 2 字符
-- **标题**：黑体，一级三号 (16pt)，二级四号 (14pt)，自动编号
-- **英文/数字**：Times New Roman 12pt
-- **代码块**：等宽字体，浅灰背景，语法高亮保留
-- **表格**：三线表样式，表头加粗居中
-- **公式**：$$...$$ → OMML 可编辑格式
-- **字体颜色**：纯黑 (#000000)
-
----
-
-## 图表渲染
-
-DOCX 不能渲染 Mermaid 代码块。DocWizard 自动检测 `.md` 中的 Mermaid 代码块，通过 mermaid.ink 渲染为 PNG 并嵌入文档。
-
-支持图表类型：graph/flowchart, journey, sequenceDiagram, gantt, pie, classDiagram, stateDiagram, erDiagram
+| Source | Output | Notes |
+|--------|--------|-------|
+| `.md` | `.docx` + `.pdf` | Mermaid diagrams auto-rendered as PNG |
+| `.md` | `.pptx` | Markdown content → presentation slides |
+| `.docx` / `.doc` | `.md` + `.pdf` | Extract text for AI reading |
+| `.pdf` | `.md` + `.docx` | Text + table extraction (OCR fallback for scanned PDFs) |
+| `.pptx` | `.md` | Extract slide text content |
+| `.xlsx` / `.csv` | Analysis report (.md + .docx + .xlsx) | Data analysis + charts + report |
+| `.drawio` | `.png` + `.svg` | Diagram export for embedding |
+| `.tex` | `.pdf` | Auto-detect compiler (tectonic/xelatex/pdflatex) |
+| `.typ` | `.pdf` + `.png` | Typst — next-gen typesetting, incremental compilation |
+| `.zip` / `.rar` / `.7z` | Auto-extract → process contents | Smart detection of assignment requirements in archives |
 
 ---
 
-## 压缩包处理
+## Chinese Academic Formatting
 
-自动检测 `.zip`、`.rar`、`.7z` 文件并解压：
+All document output automatically applies:
 
-- **ZIP**：Python stdlib，始终可用
-- **RAR**：需要 `unrar` 或 `7z`
-- **7z**：需要 `p7zip-full`
+- **Paper**: A4
+- **Margins**: top/bottom 2.54cm, left/right 3.17cm
+- **Body**: SimSun (宋体) 12pt, 1.5× line spacing, 2-char first-line indent
+- **Headings**: SimHei (黑体), Level 1: 16pt, Level 2: 14pt, auto-numbered
+- **English/Numerals**: Times New Roman 12pt
+- **Code blocks**: Monospace font, light gray background (#f5f5f5), syntax highlighting preserved
+- **Tables**: Three-line table style (academic convention), bold centered headers
+- **Formulas**: `$$...$$` → editable OMML format (falls back to images on failure)
+- **Text color**: Pure black (#000000)
 
-缺失工具时会友好提示安装命令。
-
----
-
-## LaTeX 编译
-
-自动检测 `.tex` 文件并编译为 PDF。按优先级选择编译器：
-
-| 优先级 | 编译器 | 特点 |
-|--------|--------|------|
-| 1 | `tectonic` | 自动下载缺失包、零配置，推荐 |
-| 2 | `xelatex` | 中文支持最佳 |
-| 3 | `pdflatex` | 最普遍 |
-
-无编译器时会友好提示各平台安装命令。
+Font names are platform-aware (SimSun/SimHei on Windows, Songti SC/Heiti SC on macOS, Noto CJK on Linux).
 
 ---
 
-## Typst 编译
+## Diagram Rendering
 
-Typst 是新一代排版系统，语法比 LaTeX 简洁，编译速度极快（增量编译），在大学生中快速流行。
+Mermaid code blocks cannot render in DOCX. DocWizard auto-detects Mermaid blocks in `.md` files, renders them via mermaid.ink as PNG, and embeds them in the output document.
+
+Supported types: graph/flowchart, journey, sequenceDiagram, gantt, pie, classDiagram, stateDiagram, erDiagram
+
+---
+
+## Scanned & Image-Based PDFs
+
+DocWizard handles scanned/image-based PDFs through a tiered strategy:
+
+| Tier | Method | Best For | Accuracy |
+|------|--------|----------|----------|
+| 1 | **document-skills built-in OCR** (Tesseract) | Clean printed text PDFs | 80-90% |
+| 2 | **MinerU Skill** (cloud, zero-install) | Complex layouts, formulas, tables, CJK | Excellent |
+| 3 | **marker-pdf** (local, high accuracy) | Offline, privacy-sensitive documents | 95%+ |
+
+**Tier 1** is always available (requires `tesseract-ocr` + `poppler-utils` system packages). **Tier 2** is recommended for most student use — one command install:
+```bash
+npx skills add Nebutra/MinerU-Skill
+```
+
+**Tier 3** for offline/private use:
+```bash
+pip install marker-pdf[full]
+```
+
+The agent auto-detects PDF type in Stage 5 (preprocessing) and selects the appropriate tier. If the first page has < 50 characters of extractable text, the PDF is treated as scanned.
+
+---
+
+## Archive Extraction
+
+Auto-detects `.zip`, `.rar`, `.7z` files and extracts:
+
+- **ZIP**: Python stdlib, always available (auto-handles Windows GBK filename encoding)
+- **RAR**: Requires `unrar` or `7z`
+- **7z**: Requires `p7zip-full`
+
+Missing tools get friendly install prompts per platform.
+
+---
+
+## LaTeX Compilation
+
+Auto-detects `.tex` files and compiles to PDF. Compiler priority:
+
+| Priority | Compiler | Strength |
+|----------|----------|----------|
+| 1 | `tectonic` | Auto-downloads missing packages, zero-config |
+| 2 | `xelatex` | Best Chinese support |
+| 3 | `pdflatex` | Most ubiquitous |
+
+Friendly install prompts when no compiler is found.
+
+---
+
+## Typst Compilation
+
+Typst is a next-generation typesetting system with simpler syntax than LaTeX and blazing-fast incremental compilation. Rapidly gaining popularity among students.
 
 ```bash
-# 安装（三平台）
+# Install (all platforms)
 winget install --id Typst.Typst   # Windows
 brew install typst                # macOS
-# Linux: 下载 https://github.com/typst/typst/releases
+# Linux: download from https://github.com/typst/typst/releases
 
-# 编译
+# Compile
 typst compile paper.typ output/paper.pdf
 ```
 
-`.typ` 文件是纯文本，agent 可直接阅读和理解内容。
+`.typ` files are plain text — the agent can read and understand them directly.
 
 ---
 
-## 智能场景
+## Smart Scenarios
 
-**压缩包里有 Word 需求文档？** 解压后自动读取 `.docx`，识别是否为作业要求，是则以此为准执行任务。
+**Word requirement doc inside a ZIP?** Auto-extracts `.docx` from archives, checks if it's an assignment requirement (keywords: "task", "requirement", "analyze", "please"), and uses it as the task instruction if so.
 
-**要求提交分析代码？** 自动将分析过程中使用的 Python 代码整理为独立脚本 `analysis_script.py` 输出。
+**Submit analysis code?** Auto-collects Python code used during analysis into a standalone `analysis_script.py` in `./output/`.
 
 ---
 
-## 非 Claude Code / OpenCode 环境
+## Non-Claude-Code / OpenCode Environments
 
-Codex 和 Cursor 没有 `document-skills@anthropic-agent-skills` 插件。格式转换降级为 Python 库：
+Codex and Cursor lack the `document-skills@anthropic-agent-skills` plugin. Format conversion falls back to Python libraries:
 
 ```bash
 pip install python-docx python-pptx openpyxl pdfplumber pandas
 ```
 
-| 操作 | Claude Code / OpenCode | Codex / Cursor 降级 |
-|------|----------------------|---------------------|
-| MD → DOCX | docx skill | pandoc 或 python-docx |
-| DOCX → MD | docx skill | pandoc 或 python-docx |
+| Operation | Claude Code / OpenCode | Codex / Cursor Fallback |
+|-----------|----------------------|------------------------|
+| MD → DOCX | docx skill | pandoc or python-docx |
+| DOCX → MD | docx skill | pandoc or python-docx |
 | PDF → MD | pdf skill | pdfplumber / pymupdf |
 | XLSX/CSV | xlsx skill | openpyxl + pandas |
-| PPTX 生成 | pptx skill | python-pptx |
-| Mermaid 渲染 | `helpers/render_mermaid.py` | 同左（Python stdlib） |
+| PPTX | pptx skill | python-pptx |
+| Mermaid | `helpers/render_mermaid.py` | Same (Python stdlib) |
 
-**Cursor 用户额外步骤**：需将 `SKILL.md` 转换为 `.cursor/rules/docwizard.mdc` 格式（添加 YAML frontmatter）。
+**Cursor users**: Convert `SKILL.md` to `.cursor/rules/docwizard.mdc` format (add YAML frontmatter).
 
 ---
 
-## 更新
+## Harness Compatibility
+
+| Harness | Status | document-skills | Notes |
+|---------|--------|----------------|-------|
+| **Claude Code** | Full | ✅ Native | Primary target |
+| **OpenCode** | Full | ✅ Compatible | Reads `.claude/skills/` as fallback |
+| **Codex (OpenAI)** | Degraded | ❌ | Python library fallback |
+| **Cursor** | Degraded | ❌ | Needs `.mdc` format conversion |
+
+Recommended universal path: `.agents/skills/DocWizard/` (supported by Claude Code, Codex, and OpenCode).
+
+---
+
+## Updating
 
 ```bash
 cd .agents/skills/DocWizard && git pull origin main
 ```
 
-或者对你的 AI 说：
+Or tell your AI:
 
-> 检查 DocWizard 有没有新版本
-
----
-
-## 常见问题
-
-| 问题 | 解决 |
-|------|------|
-| document-skills 插件未安装 | `/plugin install document-skills@anthropic-agent-skills` |
-| DOCX 有彩色文字 | 自动执行黑体后处理 `helpers/black_text.py` |
-| Mermaid 图渲染失败 | mermaid.ink 需要外网访问 |
-| PDF 中文乱码 | Linux: `apt install fonts-noto-cjk` |
-| RAR/7z 无法解压 | `sudo apt install unrar p7zip-full` |
-| CSV 中文乱码 | 自动尝试 GBK 编码 |
-| LaTeX 编译失败 | 安装 tectonic: `winget/brew/apt install tectonic` |
-| .tex 中文编译报错 | 用 xelatex 替代 pdflatex，或添加 `\usepackage{ctex}` |
-| Typst 编译失败 | 安装 typst: `winget/brew install typst` 或 https://github.com/typst/typst/releases |
+> Check if DocWizard has a new version
 
 ---
 
-## 鸣谢
+## FAQ
 
-DocWizard 基于以下优秀的 Claude Code 技能和开源项目构建：
+| Problem | Platform | Solution |
+|---------|----------|----------|
+| document-skills plugin not installed | Claude Code / OpenCode | `/plugin install document-skills@anthropic-agent-skills` |
+| document-skills unavailable | Codex / Cursor | `pip install python-docx python-pptx openpyxl pdfplumber` |
+| DOCX has colored text | All | `python helpers/black_text.py <file.docx>` |
+| Mermaid rendering fails | All | mermaid.ink requires internet access |
+| PDF Chinese garbled text | Linux | `sudo apt install fonts-noto-cjk` |
+| PDF Chinese garbled text | macOS | Ensure PingFang SC / Songti SC available |
+| PDF Chinese garbled text | Windows | Ensure SimSun / SimHei fonts exist |
+| RAR/7z extraction fails | All | See Stage 3 extraction section for platform-specific install commands |
+| CSV Chinese garbled text | Windows | Auto-detects GBK encoding (cp936) |
+| Scanned PDF text extraction fails | All | See [Scanned & Image-Based PDFs](#scanned--image-based-pdfs) |
+| Windows ZIP filename garbled | Windows | Auto cp437→utf-8→gbk decoding |
+| Formulas appear as images | All | OMML conversion fallback (office2pdf can help) |
 
-| 技能/工具 | 用途 | 来源 |
-|-----------|------|------|
-| `document-skills` | docx/pdf/pptx/xlsx 文档处理核心引擎 | [anthropics/skills](https://github.com/anthropics/skills) |
-| `academic-research-skills` | 学术写作流程参考（规划-执行模式） | [Imbad0202](https://github.com/Imbad0202) |
-| `MarkItDown` | 多格式→Markdown 转换思路参考 | [claude-scientific-writer](https://github.com/claude-scientific-writer) |
-| mermaid.ink | Mermaid 图表在线渲染 | [mermaid.ink](https://mermaid.ink) |
-| Pandoc | 文档转换引擎灵感来源 | [pandoc.org](https://pandoc.org) |
-| MinerU | PDF→Markdown 解析方案参考 | GitHub: aliceisjustplaying |
-| Docling (IBM) | 高精度表格/公式识别参考 | [DS4SD/docling](https://github.com/DS4SD/docling) |
-| python-docx | Word 文档生成方案参考 | [python-docx](https://python-docx.readthedocs.io) |
-| DrawIO MCP | 复杂图表绘制与导出 | MCP 集成 |
-| `Typst` | 新一代排版系统（.typ → PDF） | [typst.app](https://typst.app) |
-| `Typst MCP Server` | Typst 排版 MCP 集成 | MCP 生态 |
-| `mcp-pandoc` | Markdown/HTML/LaTeX 转换 MCP | MCP 生态 |
-| `awesome-claude-skills` | 1000+ Claude Code 技能库参考 | [ComposioHQ](https://github.com/ComposioHQ/awesome-claude-skills) |
-| `CrossRef` / `Semantic Scholar` | 参考文献 DOI 验证 API | [crossref.org](https://crossref.org) |
-| `refcheck` MCP | 参考文献自动验证 | MCP 生态 |
-| `CheckIfExist` | 批量 BibTeX 多源验证 | GitHub 开源 |
-| `VeriBib` | AI 幻觉引用检测 | GitHub 开源 |
-| `tectonic` | LaTeX 编译引擎（推荐） | [tectonic-typesetting](https://github.com/tectonic-typesetting/tectonic) |
-| `Pdf It` (MCP) | Markdown→专业 PDF（目录/页码/字体嵌入） | MCP 生态 |
-| `skill-forge` | Skill 构建元工具 | Claude Code 官方 |
+---
+
+## Acknowledgments
+
+DocWizard builds upon these excellent Claude Code skills and open-source projects:
+
+| Skill / Tool | Purpose | Source |
+|-------------|---------|--------|
+| `document-skills` | Core docx/pdf/pptx/xlsx processing engine | [anthropics/skills](https://github.com/anthropics/skills) |
+| `academic-research-skills` | Academic writing workflow reference (plan-execute pattern) | [Imbad0202](https://github.com/Imbad0202) |
+| `MarkItDown` | Multi-format → Markdown conversion reference | [claude-scientific-writer](https://github.com/claude-scientific-writer) |
+| mermaid.ink | Online Mermaid diagram rendering | [mermaid.ink](https://mermaid.ink) |
+| Pandoc | Document conversion engine inspiration | [pandoc.org](https://pandoc.org) |
+| MinerU | High-precision PDF/Office → Markdown parsing | [opendatalab/MinerU](https://github.com/opendatalab/MinerU) |
+| Docling (IBM) | High-accuracy table/formula recognition | [DS4SD/docling](https://github.com/DS4SD/docling) |
+| python-docx | Word document generation | [python-docx](https://python-docx.readthedocs.io) |
+| DrawIO MCP | Complex diagram rendering & export | MCP Integration |
+| `Typst` | Next-gen typesetting (.typ → PDF) | [typst.app](https://typst.app) |
+| `Typst MCP Server` | Typst typesetting MCP integration | MCP Ecosystem |
+| `mcp-pandoc` | Markdown/HTML/LaTeX conversion MCP | MCP Ecosystem |
+| `awesome-claude-skills` | 1000+ Claude Code skills library reference | [ComposioHQ](https://github.com/ComposioHQ/awesome-claude-skills) |
+| `CrossRef` / `Semantic Scholar` | Reference DOI verification APIs | [crossref.org](https://crossref.org) |
+| `refcheck` MCP | Automatic reference verification | MCP Ecosystem |
+| `CheckIfExist` | Batch BibTeX multi-source verification | GitHub Open Source |
+| `VeriBib` | AI hallucinated citation detection | GitHub Open Source |
+| `tectonic` | LaTeX compilation engine (recommended) | [tectonic-typesetting](https://github.com/tectonic-typesetting/tectonic) |
+| `Pdf It` (MCP) | Markdown→Professional PDF (TOC/page numbers/font embedding) | MCP Ecosystem |
+| `skill-forge` | Skill authoring meta-tool | Claude Code Official |
+| `format-thesis` | Chinese thesis Word formatting | [lilanlan11](https://github.com/lilanlan11/format-thesis) |
+| `GPT-Researcher` | Autonomous research agent (MCP) | [assafelovic](https://github.com/assafelovic/gpt-researcher) |
+| `STORM` | Stanford knowledge curation system | [stanford-oval](https://github.com/stanford-oval/storm) |
+| `Slidev` | Markdown→Presentation slides | [slidevjs](https://github.com/slidevjs/slidev) |
+| `ydata-profiling` | Automated EDA reports | [ydataai](https://github.com/ydataai/ydata-profiling) |
+| `office2pdf` | Rust-based Office→PDF (zero deps) | [developer0hye](https://github.com/developer0hye/office2pdf) |
+| `Marp` | Markdown→PPTX presentations | [marp-team](https://github.com/marp-team/marp) |
+| `gpt-academic` | Chinese academic AI assistant | [binary-husky](https://github.com/binary-husky/gpt_academic) |
+| `D2` | Modern declarative diagramming | [terrastruct](https://github.com/terrastruct/d2) |
+| `Paperlib` | Open-source reference manager | [Future-Scholars](https://github.com/Future-Scholars/paperlib) |
+| `Quarto` | Scientific publishing system | [quarto-dev](https://github.com/quarto-dev/quarto-cli) |
+| `Awesome Typst CN` | Chinese university Typst templates | [qjcg](https://github.com/qjcg/awesome-typst) |
+| `Camelot` | PDF table extraction | [camelot-dev](https://github.com/camelot-dev/camelot) |
+
+---
+
+## Contributing
+
+Contributions are welcome! DocWizard aims to save students from tedious homework formatting.
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+Please ensure your changes are cross-platform (Windows/macOS/Linux) and, where applicable, cross-harness (Claude Code/OpenCode/Codex/Cursor).
+
+### Project Structure
+
+```
+DocWizard/
+├── SKILL.md              # Agent operation manual (main entry point)
+├── skill.json            # Configuration & metadata
+├── task.md               # User task template
+├── helpers/
+│   ├── render_mermaid.py # Mermaid → PNG renderer (stdlib only)
+│   ├── black_text.py     # DOCX black text post-processor
+│   ├── verify_refs.py    # Reference DOI/title verifier
+│   └── __init__.py
+├── test_helpers.py       # Helper script tests
+├── setup.py              # One-click cross-platform installer
+├── docs/
+│   ├── CHANGELOG.md
+│   ├── TARGET.md
+│   └── TODO.md
+└── demo/                 # Demo scenarios
+```
 
 ---
 
 ## License
 
-MIT — 李裕峰
+MIT — [李裕峰](https://github.com/cowhorse05)

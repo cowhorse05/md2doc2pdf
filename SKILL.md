@@ -596,28 +596,39 @@ typst watch <file>.typ ./output/<file>.pdf
 
 ---
 
-## PDF 解析增强
+## PDF 解析增强（含纯图片/扫描版 PDF）
 
-当 document-skills 的 pdf skill 对扫描版 PDF 或复杂排版论文效果不佳时，可以引入专项 PDF 解析 Skill 作为补充。
+document-skills 的 pdf skill 内置了 Tesseract OCR 回退：当标准文本提取（pypdf/pdfplumber）无结果时，自动将每页转为图片后调用 Tesseract 识别。但这对于复杂排版、公式、表格的扫描件效果有限。
 
-### 推荐 Skill
+### 三层策略
 
-| Skill | 适用场景 | 安装 |
-|-------|----------|------|
-| `pdf-converter-mineru` | 扫描版 PDF OCR、复杂排版论文解析 | `/plugin install pdf-converter-mineru` |
-| `pdf-toolkit-mcp` | PDF 合并/拆分/水印/加密 | `/plugin install pdf-toolkit-mcp` |
+| 层级 | 方案 | 适用场景 | 准确率 | 依赖 |
+|------|------|----------|--------|------|
+| **1** | document-skills 内置 OCR（Tesseract） | 清晰的印刷体 PDF | 80-90% | `tesseract-ocr` + `poppler-utils`（系统包） |
+| **2** | MinerU Skill（云端，零安装） | 复杂排版、公式、表格、CJK | 优秀 | `npx skills add Nebutra/MinerU-Skill` |
+| **3** | marker-pdf（本地，高精度） | 离线、隐私敏感 | 95%+ | `pip install marker-pdf[full]`（需 PyTorch） |
 
-### 使用策略
+**层级 1 限制**：无布局保留、无公式识别、无表格结构提取、手写体几乎不可用（30-55%）。仅适合干净的印刷文档。
+
+**层级 2 推荐用于大多数学生场景**：一条命令安装，无需本地 GPU，公式→LaTeX、表格→HTML、布局保留为 Markdown。
+
+**层级 3 适合离线/隐私场景**：完全本地运行，多语言支持（90+），保留文档结构，支持 GPU 加速。
+
+### 自动检测与选择
 
 ```
 检测 PDF 类型:
-  ├─ 文字型 PDF (document-skills pdf skill 能正常提取)
+  ├─ 文字型 PDF（第一页 > 50 字符）
   │   → 使用 pdf skill 提取文字和表格
   │
-  ├─ 扫描版 PDF / 图片型 PDF / 复杂排版
-  │   → 检测 pdf-converter-mineru 是否可用
-  │   → 可用: 委托给 mineru 做 OCR 提取
-  │   → 不可用: 提示用户安装 pdf-converter-mineru
+  ├─ 扫描版/图片型 PDF（第一页 < 50 字符）
+  │   ├─ 检测 MinerU Skill 是否可用（npx skills list）
+  │   │   → 可用: 委托给 MinerU 做 OCR 提取
+  │   │   → 不可用: 检测 Tesseract 是否安装
+  │   │       → 已安装: 使用 document-skills 内置 OCR（层级 1）
+  │   │       → 未安装: 提示用户安装 MinerU 或 Tesseract
+  │   │
+  │   └─ 离线环境: 提示安装 marker-pdf
   │
   └─ 需要合并/拆分/加密操作
       → 检测 pdf-toolkit-mcp 是否可用
