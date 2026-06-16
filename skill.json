@@ -175,7 +175,36 @@
     "pdf_to_md": "使用 pdf skill 提取 PDF 的完整文字和表格，保存为 Markdown",
     "pdf_to_docx": "先用 pdf skill 提取文字为 Markdown，再用 docx skill 生成 DOCX",
     "csv_xlsx_analysis": "使用 xlsx skill 读取数据，分析结构和内容，生成分析报告（CSV 先检测编码）",
+    "tex_to_pdf": "自动检测编译器 (tectonic > xelatex > pdflatex) 编译 .tex 为 PDF，缺失则提示安装",
     "docx_black_text": "转换后执行: python helpers/black_text.py <output.docx>"
+  },
+
+  "latex_support": {
+    "enabled": true,
+    "compilers": {
+      "tectonic": {"priority": 1, "description": "自动下载缺失包、零配置、跨平台", "windows": "winget install tectonic", "darwin": "brew install tectonic", "linux": "下载 AppImage"},
+      "xelatex": {"priority": 2, "description": "中文支持最佳", "windows": "MiKTeX 自带", "darwin": "MacTeX 自带", "linux": "apt install texlive-xetex"},
+      "pdflatex": {"priority": 3, "description": "最普遍", "windows": "MiKTeX 自带", "darwin": "MacTeX 自带", "linux": "apt install texlive-latex-base"}
+    },
+    "compile_cmd": {
+      "tectonic": "tectonic -X compile <file>.tex -o ./output/",
+      "xelatex": "xelatex -interaction=nonstopmode -output-directory=./output <file>.tex",
+      "pdflatex": "pdflatex -interaction=nonstopmode -output-directory=./output <file>.tex"
+    },
+    "cleanup": ["*.aux", "*.log", "*.out", "*.toc", "*.synctex.gz", "*.bbl", "*.bcf", "*.blg", "*.run.xml", "*.fls", "*.fdb_latexmk", "*.xdv"]
+  },
+
+  "smart_scenarios": {
+    "word_requirement_in_zip": {
+      "trigger": "解压后发现 .docx 文件",
+      "action": "委托 docx skill 提取文字 → 检测是否包含作业要求关键词（任务/要求/分析/请）→ 是则作为任务指令执行",
+      "priority": "等同于 task.md"
+    },
+    "output_analysis_code": {
+      "trigger": "任务要求提到「提交代码」「附上代码」「分析脚本」",
+      "action": "将分析过程中使用的 Python 代码整理为独立脚本 analysis_script.py → 输出到 ./output/",
+      "format": "添加注释和说明，可直接运行"
+    }
   },
 
   "conversion_rules": {
@@ -187,7 +216,7 @@
     ".pptx": "→ .md（委托 pptx skill 提取文字）",
     ".xlsx": "→ 分析报告 .md + .docx（委托 xlsx skill + docx skill）",
     ".csv": "→ 分析报告 .md + .docx（委托 xlsx skill + docx skill）",
-    ".tex": "→ .pdf（委托 pdf skill，尽力而为）",
+    ".tex": "→ .pdf（自动检测编译器 tectonic/xelatex/pdflatex，缺失则跳过）",
     ".drawio": "→ .png + .svg（DrawIO MCP export_diagram）",
     ".zip / .rar / .7z": "→ 解压 → 扫描文档 → 加入处理队列"
   },

@@ -398,6 +398,76 @@ print(f'CSV encoding: {enc}')
 5. 输出到 ./output/ 目录
 ```
 
+### .tex → PDF（LaTeX 编译）
+
+**编译器检测**（按优先级）：
+
+| 编译器 | 优势 | Windows | macOS | Linux |
+|--------|------|---------|-------|-------|
+| `tectonic` | 自动下载缺失包、多遍编译、零配置 | `winget install tectonic` | `brew install tectonic` | `apt install tectonic` 或下载二进制 |
+| `xelatex` | 中文支持好 | MiKTeX/Win自带 | MacTeX 自带 | `apt install texlive-xetex` |
+| `pdflatex` | 最普遍 | MiKTeX/Win自带 | MacTeX 自带 | `apt install texlive-latex-base` |
+
+**检测命令**：
+```bash
+# 按优先级检测
+python -c "
+import shutil
+for cmd in ['tectonic', 'xelatex', 'pdflatex']:
+    if shutil.which(cmd):
+        print(f'LATEX: {cmd}')
+        break
+else:
+    print('LATEX: not found')
+"
+```
+
+**编译命令**（按检测到的编译器选择）：
+```bash
+# tectonic（推荐，自动处理交叉引用和 BibTeX）
+tectonic -X compile <file>.tex -o ./output/
+
+# xelatex（中文支持最佳）
+xelatex -interaction=nonstopmode -output-directory=./output <file>.tex
+
+# pdflatex
+pdflatex -interaction=nonstopmode -output-directory=./output <file>.tex
+```
+
+**编译后清理**：删除 `.aux`、`.log`、`.out`、`.toc`、`.synctex.gz` 等辅助文件。
+
+**如果所有编译器都未安装**：
+```
+当前系统未检测到 LaTeX 编译器。推荐安装 tectonic（最轻量，自动管理依赖）：
+
+  Windows: winget install tectonic
+  macOS:   brew install tectonic
+  Linux:   从 https://github.com/tectonic-typesetting/tectonic/releases 下载 AppImage
+
+或者安装完整 TeX Live：
+
+  Windows: winget install MiKTeX.MiKTeX
+  macOS:   brew install --cask mactex  (约 4GB)
+  Linux:   sudo apt install texlive-xetex texlive-latex-extra
+
+跳过 .tex 文件的编译。其他格式转换继续。
+```
+
+**LaTeX 委托提示词模板**（当编译器可用时）：
+
+```
+使用 {tectonic/xelatex/pdflatex} 将以下 .tex 文件编译为 PDF：
+
+{文件路径}
+
+要求：
+1. 当前平台: {Windows/macOS/Linux}
+2. 编译器: {检测到的编译器}
+3. 中文支持: 如使用 xelatex，确保 \usepackage{ctex} 或 \usepackage{xeCJK}
+4. 输出到 ./output/ 目录
+5. 编译后清理辅助文件 (.aux, .log 等)
+```
+
 ---
 
 ## 上下文策略
@@ -458,9 +528,45 @@ python helpers/render_mermaid.py <file.md> --output-dir ./output
 | `.pdf` | `.md` + `.docx` | pdf skill → docx skill |
 | `.pptx` | `.md` | pptx skill |
 | `.xlsx` / `.csv` | 分析报告 (.md + .docx + .xlsx) | xlsx skill + docx skill |
-| `.tex` | `.pdf` | 尝试用 pdf skill，失败则跳过 |
+| `.tex` | `.pdf` | 自动检测编译器 (tectonic > xelatex > pdflatex)，缺失则跳过并提示安装 |
 | `.drawio` | `.png` + `.svg` | DrawIO MCP |
 | `.zip` / `.rar` / `.7z` | 解压 → 扫描 → 加入队列 | Python zipfile / unrar / 7z |
+
+---
+
+## LaTeX 编译支持
+
+DocWizard 支持 `.tex` 文件编译为 PDF。优先推荐 **tectonic**（轻量、自动下载缺失包、跨平台）。
+
+### 编译器优先级
+
+| 优先级 | 编译器 | 特点 | Windows 安装 | macOS 安装 | Linux 安装 |
+|--------|--------|------|-------------|-----------|-----------|
+| 1 | `tectonic` | 自动管理依赖、多遍编译 | `winget install tectonic` | `brew install tectonic` | 下载 AppImage |
+| 2 | `xelatex` | 中文支持最佳 | MiKTeX 自带 | MacTeX 自带 | `apt install texlive-xetex` |
+| 3 | `pdflatex` | 最普遍 | MiKTeX 自带 | MacTeX 自带 | `apt install texlive-latex-base` |
+
+编译器检测在阶段 1（环境检查）中完成。如果用户目录中有 `.tex` 文件但无编译器，会提示安装并跳过编译。
+
+## 智能场景识别（新增）
+
+### 场景：压缩包内有 Word 需求文档
+
+当解压压缩包后发现 `.docx` 文件时，自动识别是否为**作业要求文档**：
+
+1. 解压后，委托 docx skill 提取 `.docx` 的全部文字
+2. 判断内容是否为作业要求（包含「任务」「要求」「分析」「请」等关键词）
+3. 如果是作业要求 → **以此为准**执行任务，优先级等同于 task.md
+4. 如果只是普通文档 → 加入转换队列
+
+### 场景：要求提交分析代码
+
+当 task.md 或 Word 需求文档中提到「提交代码」「附上代码」「分析脚本」时：
+
+1. 将分析过程中使用的 Python 代码整理为独立脚本
+2. 添加注释和说明
+3. 保存为 `analysis_script.py` 到 `./output/` 目录
+4. 在汇报中列出该文件
 
 ---
 

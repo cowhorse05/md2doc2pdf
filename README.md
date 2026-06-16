@@ -51,7 +51,8 @@ AI 会自动：
 | `.pptx` | `.md` | 提取 PPT 文字内容 |
 | `.xlsx` / `.csv` | 分析报告 (.md + .docx + .xlsx) | 数据分析 + 图表 + 报告 |
 | `.drawio` | `.png` + `.svg` | 图表导出嵌入文档 |
-| `.zip` / `.rar` / `.7z` | 自动解压 → 处理其中文档 | 支持嵌套检测 |
+| `.tex` | `.pdf` | 自动检测编译器 (tectonic/xelatex/pdflatex) |
+| `.zip` / `.rar` / `.7z` | 自动解压 → 处理其中文档 | 智能识别压缩包内 Word 需求文档 |
 
 ---
 
@@ -91,6 +92,28 @@ DOCX 不能渲染 Mermaid 代码块。DocWizard 自动检测 `.md` 中的 Mermai
 
 ---
 
+## LaTeX 编译
+
+自动检测 `.tex` 文件并编译为 PDF。按优先级选择编译器：
+
+| 优先级 | 编译器 | 特点 |
+|--------|--------|------|
+| 1 | `tectonic` | 自动下载缺失包、零配置，推荐 |
+| 2 | `xelatex` | 中文支持最佳 |
+| 3 | `pdflatex` | 最普遍 |
+
+无编译器时会友好提示各平台安装命令。
+
+---
+
+## 智能场景
+
+**压缩包里有 Word 需求文档？** 解压后自动读取 `.docx`，识别是否为作业要求，是则以此为准执行任务。
+
+**要求提交分析代码？** 自动将分析过程中使用的 Python 代码整理为独立脚本 `analysis_script.py` 输出。
+
+---
+
 ## 更新
 
 ```bash
@@ -113,6 +136,21 @@ cd .claude/skills/DocWizard && git pull origin main
 | PDF 中文乱码 | Linux: `apt install fonts-noto-cjk` |
 | RAR/7z 无法解压 | `sudo apt install unrar p7zip-full` |
 | CSV 中文乱码 | 自动尝试 GBK 编码 |
+| LaTeX 编译失败 | 安装 tectonic: `winget/brew/apt install tectonic` |
+| .tex 中文编译报错 | 用 xelatex 替代 pdflatex，或添加 `\usepackage{ctex}` |
+
+---
+
+## 鸣谢
+
+DocWizard 基于以下优秀的 Claude Code 技能和工具构建：
+
+| 技能/工具 | 用途 | 来源 |
+|-----------|------|------|
+| `document-skills` | docx/pdf/pptx/xlsx 文档处理核心引擎 | [anthropics/skills](https://github.com/anthropics/skills) |
+| mermaid.ink | Mermaid 图表在线渲染 | [mermaid.ink](https://mermaid.ink) |
+| DrawIO MCP | 复杂图表绘制与导出 | MCP 集成 |
+| `tectonic` | LaTeX 编译引擎（推荐） | [tectonic-typesetting](https://github.com/tectonic-typesetting/tectonic) |
 
 ---
 

@@ -13,6 +13,20 @@ __pycache__/
 output/
 extracted/
 
+# LaTeX auxiliary files
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz
+*.bbl
+*.bcf
+*.blg
+*.run.xml
+*.fls
+*.fdb_latexmk
+*.xdv
+
 # IDE
 .vscode/
 .idea/
