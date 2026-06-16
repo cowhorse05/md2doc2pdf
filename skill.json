@@ -1,7 +1,7 @@
 {
   "name": "DocWizard",
   "version": "3.0.0",
-  "description": "DocWizard — AI 驱动的作业一站式助手：通过 document-skills 插件完成 Markdown/Word/PDF/PPT/Excel 互转与生成。零外部依赖，支持压缩包解压、中文学术排版。",
+  "description": "DocWizard — AI 驱动的作业一站式助手：通过 document-skills 插件完成 Markdown/Word/PDF/PPT/Excel 互转与生成。零外部依赖，支持压缩包解压、中文学术排版。跨平台：Windows / macOS / Linux。",
   "entry": "SKILL.md",
   "test": "test_helpers.py",
   "task_file": "task.md",
@@ -15,18 +15,76 @@
     "description": "Python 仅用于 Mermaid 图表渲染和 DOCX 黑体后处理（均为 stdlib 零依赖脚本）。document-skills 插件包含 docx/pdf/pptx/xlsx 四个 Skill。"
   },
 
+  "platforms": {
+    "Windows": {
+      "python_cmd": "python",
+      "shell_check": "where",
+      "package_manager": "winget",
+      "path_sep": "\\",
+      "zip_encoding_fallback": ["cp437", "utf-8", "gbk"],
+      "fonts": {
+        "body_cn": "SimSun",
+        "heading_cn": "SimHei",
+        "kai": "KaiTi",
+        "mono": "Consolas"
+      },
+      "archive_tools": {
+        "rar_install": "winget install RARLab.WinRAR",
+        "7z_install": "winget install 7zip.7zip"
+      }
+    },
+    "Darwin": {
+      "python_cmd": "python3",
+      "shell_check": "command -v",
+      "package_manager": "brew",
+      "path_sep": "/",
+      "zip_encoding_fallback": ["utf-8"],
+      "fonts": {
+        "body_cn": "Songti SC",
+        "heading_cn": "Heiti SC",
+        "kai": "Kaiti SC",
+        "mono": "SF Mono"
+      },
+      "archive_tools": {
+        "rar_install": "brew install unrar",
+        "7z_install": "brew install p7zip"
+      }
+    },
+    "Linux": {
+      "python_cmd": "python3",
+      "shell_check": "command -v",
+      "package_manager": "apt",
+      "path_sep": "/",
+      "zip_encoding_fallback": ["utf-8"],
+      "fonts": {
+        "body_cn": "Noto Serif CJK SC",
+        "heading_cn": "Noto Sans CJK SC",
+        "kai": "Noto Sans CJK SC",
+        "mono": "DejaVu Sans Mono"
+      },
+      "archive_tools": {
+        "rar_install": "sudo apt install unrar",
+        "7z_install": "sudo apt install p7zip-full"
+      }
+    }
+  },
+
   "install": {
     "clone": "git clone https://github.com/cowhorse05/DocWizard.git",
     "plugin_install": "/plugin install document-skills@anthropic-agent-skills",
-    "description": "安装 document-skills 插件并 clone DocWizard 仓库即可使用。无需 pandoc/Chrome/pdftotext/LaTeX。"
+    "description": "安装 document-skills 插件并 clone DocWizard 仓库即可使用。无需 pandoc/Chrome/pdftotext/LaTeX。三平台统一安装方式。"
   },
 
   "agent_workflow": {
+    "platform_detection": {
+      "description": "每次执行前必须先检测平台，后续所有操作根据平台选用正确的命令和字体。",
+      "command": "python -c \"import platform; print(platform.system())\""
+    },
     "on_install": {
       "phase_1_plugin_check": [
         "检查 document-skills@anthropic-agent-skills 插件是否已安装",
         "未安装 → 引导用户执行 /plugin install document-skills@anthropic-agent-skills",
-        "已安装 → 确认 Python 可用性（仅用于 helper 脚本）"
+        "已安装 → 确认 Python 可用性（按平台选择 python/python3 命令）"
       ],
       "phase_2_final_choice": [
         "所有检查完毕后，必须问用户最后的选择题：",
@@ -37,19 +95,36 @@
       ]
     },
     "on_user_says_execute": [
-      "重新扫描目录（用户可能加了新文件或压缩包）",
+      "第一步：检测平台 (Windows/Darwin/Linux)",
+      "重新扫描目录（用户可能加了新文件或压缩包），使用 Python glob 而非 shell find",
       "读 task.md 获取最新勾选",
       "检查 document-skills 插件可用性",
-      "按 7 阶段流水线执行：环境检查 → 扫描 → 解压 → 读 task.md → 预处理 → 委托转换 → 汇报",
+      "按 7 阶段流水线执行，每步根据 platform 选择正确的命令",
       "按 reporting.template 输出汇报"
     ],
 
     "archive_extraction": {
       "enabled": true,
       "formats": {
-        "zip": "Python zipfile (stdlib) — 始终可用",
-        "rar": "unrar 或 7z 命令（缺失则提示用户安装 unrar）",
-        "7z": "7z 命令（缺失则提示用户安装 p7zip-full）"
+        "zip": {
+          "method": "Python zipfile (stdlib)",
+          "cross_platform": true,
+          "encoding_fix": "按平台依次尝试 zip_encoding_fallback 解码中文文件名"
+        },
+        "rar": {
+          "method": "unrar 或 7z",
+          "cross_platform": false,
+          "windows": "where unrar || where 7z || (提示安装: winget install RARLab.WinRAR)",
+          "darwin": "command -v unrar || command -v 7z || (提示安装: brew install unrar)",
+          "linux": "command -v unrar || command -v 7z || (提示安装: sudo apt install unrar)"
+        },
+        "7z": {
+          "method": "7z",
+          "cross_platform": false,
+          "windows": "where 7z || (提示安装: winget install 7zip.7zip)",
+          "darwin": "command -v 7z || (提示安装: brew install p7zip)",
+          "linux": "command -v 7z || (提示安装: sudo apt install p7zip-full)"
+        }
       },
       "output_dir": "./extracted/",
       "post_extract": "重新扫描 extracted/ 目录并将文档加入处理队列",
@@ -57,7 +132,7 @@
         "nested_archives": "列出但不递归解压（安全考虑）",
         "password_protected": "报告「有密码保护，请手动解压后放入目录」",
         "empty_archive": "跳过并提示",
-        "windows_gbk_zip": "尝试 cp936 编码解码文件名"
+        "windows_gbk_zip": "Python 脚本自动按 cp437→utf-8→gbk 顺序解码文件名"
       }
     },
 
@@ -65,18 +140,13 @@
       "paper_size": "A4",
       "margins": {"top": "2.54cm", "bottom": "2.54cm", "left": "3.17cm", "right": "3.17cm"},
       "line_spacing": 1.5,
-      "fonts": {
-        "body_cn": "宋体 (SimSun) 小四 12pt",
-        "heading_cn": "黑体 (SimHei) 三号 16pt / 四号 14pt",
-        "body_en": "Times New Roman 12pt",
-        "code": "Consolas / Courier New 等宽 10.5pt"
-      },
       "text_color": "#000000 (纯黑)",
       "heading_numbering": "第一章 / 1.1 / 1.1.1 自动编号",
       "paragraph": "首行缩进 2 字符",
       "table_style": "三线表，表头加粗浅灰底色",
       "code_block": "等宽字体，浅灰背景(#f5f5f5)，语法高亮保留",
-      "formula": "$$...$$ → OMML 可编辑格式（非图片），失败则降级为图片"
+      "formula": "$$...$$ → OMML 可编辑格式（非图片），失败则降级为图片",
+      "font_selection": "根据当前平台从 platforms.<os>.fonts 中选择对应字体"
     },
 
     "context_rules": {
@@ -84,10 +154,10 @@
       "docx_doc_files": "委托 docx skill 提取文字后读入",
       "pdf_files": "委托 pdf skill 提取文字和表格后读入",
       "pptx_files": "委托 pptx skill 提取文字后读入",
-      "xlsx_csv_files": "委托 xlsx skill 读取结构和前 20 行后理解数据",
+      "xlsx_csv_files": "委托 xlsx skill 读取结构和前 20 行；CSV 先检测编码 (UTF-8/GBK)",
       "archive_files": "检测并解压 → 扫描提取内容 → 将文档加入队列",
       "task_md": "全文读入。只读不写！",
-      "skill_json": "全文读入获取配置"
+      "skill_json": "全文读入获取平台配置和转换规则"
     },
     "task_md_readonly": {
       "rule": "task.md 是用户的任务指令文件，永远不要修改它",
@@ -97,20 +167,20 @@
   },
 
   "document_skills_delegation": {
-    "md_to_docx": "使用 docx skill 将 Markdown 转换为 Word 文档，按中文格式要求排版",
+    "md_to_docx": "使用 docx skill 将 Markdown 转换为 Word 文档，按中文格式要求排版（字体名按平台选择）",
     "md_to_pdf": "先将 MD 转为 DOCX，再用 pdf skill 将 DOCX 转为 PDF",
-    "md_to_pptx": "使用 pptx skill 将 Markdown 内容生成演示文稿",
+    "md_to_pptx": "使用 pptx skill 将 Markdown 内容生成演示文稿（字体名按平台选择）",
     "docx_to_md": "使用 docx skill 提取 Word 文档的完整文字内容，保存为 Markdown",
     "docx_to_pdf": "使用 pdf skill 将 DOCX 转换为 PDF",
     "pdf_to_md": "使用 pdf skill 提取 PDF 的完整文字和表格，保存为 Markdown",
     "pdf_to_docx": "先用 pdf skill 提取文字为 Markdown，再用 docx skill 生成 DOCX",
-    "csv_xlsx_analysis": "使用 xlsx skill 读取数据，分析结构和内容，生成分析报告",
+    "csv_xlsx_analysis": "使用 xlsx skill 读取数据，分析结构和内容，生成分析报告（CSV 先检测编码）",
     "docx_black_text": "转换后执行: python helpers/black_text.py <output.docx>"
   },
 
   "conversion_rules": {
     ".md": "→ .docx + .pdf（委托 docx skill + pdf skill）",
-    ".md": "→ .pptx（委托 pptx skill，如 task.md 要求）",
+    ".md_pptx": "→ .pptx（委托 pptx skill，如 task.md 要求）",
     ".docx": "→ .md + .pdf（委托 docx skill + pdf skill）",
     ".doc": "→ .md + .pdf（委托 docx skill + pdf skill）",
     ".pdf": "→ .md + .docx（委托 pdf skill + docx skill）",
@@ -123,13 +193,14 @@
   },
 
   "diagram_pipeline": {
-    "description": "Mermaid 代码块在 DOCX 中无法渲染，必须先将图表导出为 PNG 再嵌入。",
+    "description": "Mermaid 代码块在 DOCX 中无法渲染，必须先将图表导出为 PNG 再嵌入。三平台通用（纯 Python stdlib）。",
     "priority": ["mermaid_first", "drawio_fallback"],
     "mermaid": {
       "when": "流程图、旅程图、简单架构图（节点<20）",
       "render": "mermaid.ink API → PNG",
       "method": "base64(mermaid_code) → https://mermaid.ink/img/{encoded}",
       "script": "python helpers/render_mermaid.py <file.md> --output-dir ./output",
+      "cross_platform": true,
       "supported_types": ["graph", "flowchart", "journey", "sequenceDiagram", "gantt", "pie", "classDiagram", "stateDiagram", "erDiagram"]
     },
     "drawio": {
@@ -143,11 +214,11 @@
   "reporting": {
     "description": "所有任务完成后，agent 必须输出结构化汇报。",
     "required_sections": ["已完成", "未完成", "遇到的问题", "输出文件清单"],
-    "template": "## 📋 处理汇报\n\n### ✅ 已完成\n- (逐条列出完成的项目)\n\n### ❌ 未完成\n- (如有，说明原因)\n\n### ⚠️ 遇到的问题\n- (如有报错/警告/跳过的文件)\n\n### 📁 输出文件\n| 源文件 | 输出 | 大小 | 状态 |\n|--------|------|------|------|\n| xxx.md | xxx.docx | 23KB | OK |\n\n如果一切顺利没有失败，在汇报末尾加一句：**「全部处理完成，没有失败。」**"
+    "template": "## 处理汇报\n\n### 已完成\n- (逐条列出完成的项目)\n\n### 未完成\n- (如有，说明原因)\n\n### 遇到的问题\n- (如有报错/警告/跳过的文件)\n\n### 输出文件\n| 源文件 | 输出 | 大小 | 状态 |\n|--------|------|------|------|\n| xxx.md | xxx.docx | 23KB | OK |\n\n如果一切顺利没有失败，在汇报末尾加一句：**「全部处理完成，没有失败。」**"
   },
 
   "update": {
     "mechanism": "git pull origin main",
-    "description": "在 .claude/skills/DocWizard/ 下执行 git pull 即可更新到最新版本"
+    "description": "在 .claude/skills/DocWizard/ 下执行 git pull 即可更新到最新版本。三平台通用。"
   }
 }
