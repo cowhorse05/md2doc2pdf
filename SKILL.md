@@ -96,7 +96,7 @@ DocWizard 仓库 clone 完毕后，**必须问用户**：
 ```bash
 python -c "
 import os, glob
-patterns = ['*.md','*.docx','*.doc','*.pdf','*.pptx','*.xlsx','*.csv','*.tex','*.typ','*.drawio','*.dio','*.zip','*.rar','*.7z']
+patterns = ['*.md','*.txt','*.html','*.docx','*.doc','*.pdf','*.pptx','*.xlsx','*.csv','*.tex','*.typ','*.drawio','*.dio','*.zip','*.rar','*.7z']
 found = {}
 for p in patterns:
     for f in glob.glob('**/'+p, recursive=True):
@@ -114,7 +114,7 @@ for ext, files in sorted(found.items()):
 ```
 
 按类型分组列出，标注大小：
-- 文档类：.md, .docx, .doc, .pdf, .tex, .typ
+- 文档类：.md, .txt, .html, .docx, .doc, .pdf, .tex, .typ
 - 数据类：.xlsx, .csv
 - 演示类：.pptx
 - 图表类：.drawio, .dio
