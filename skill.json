@@ -205,6 +205,21 @@
     }
   },
 
+  "typst_support": {
+    "enabled": true,
+    "description": "Typst 新一代排版系统，语法简洁、编译极快，大学生中快速流行",
+    "compiler": {
+      "check": "typst --version",
+      "windows": "winget install --id Typst.Typst",
+      "darwin": "brew install typst",
+      "linux": "下载二进制: https://github.com/typst/typst/releases"
+    },
+    "compile_pdf": "typst compile <file>.typ ./output/<file>.pdf",
+    "compile_png": "typst compile <file>.typ ./output/<file>.png",
+    "watch": "typst watch <file>.typ ./output/<file>.pdf",
+    "features": ["增量编译", "PDF/PNG/SVG 输出", "原生 Unicode/中文支持", "集成脚本语言"]
+  },
+
   "pdf_enhancement": {
     "description": "当 document-skills pdf skill 对扫描版 PDF 效果不佳时的补充方案",
     "skills": {
@@ -256,6 +271,7 @@
     ".xlsx": "→ 分析报告 .md + .docx（委托 xlsx skill + docx skill）",
     ".csv": "→ 分析报告 .md + .docx（委托 xlsx skill + docx skill）",
     ".tex": "→ .pdf（自动检测编译器 tectonic/xelatex/pdflatex，缺失则跳过）",
+    ".typ": "→ .pdf + .png（自动检测 typst 编译器，缺失则跳过）",
     ".drawio": "→ .png + .svg（DrawIO MCP export_diagram）",
     ".zip / .rar / .7z": "→ 解压 → 扫描文档 → 加入处理队列"
   },

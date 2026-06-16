@@ -81,7 +81,9 @@ DocWizard 仓库 clone 完毕后，**必须问用户**：
 1. **检测平台**：`python -c "import platform; print(platform.system())"`
 2. **确认 Python 命令**：`python3 --version` 失败则用 `python`
 3. **确认 document-skills 插件可用**（尝试调用 docx/pdf/pptx/xlsx skill 的能力）
-4. **确认输出目录** `./output/` 存在（不存在则创建）
+4. **检测 Typst 编译器**：`typst --version`（可选，用于 .typ 文件编译）
+5. **检测 LaTeX 编译器**：`tectonic --version || xelatex --version || pdflatex --version`（可选）
+6. **确认输出目录** `./output/` 存在（不存在则创建）
 
 ### 阶段 2：扫描与发现
 
@@ -94,7 +96,7 @@ DocWizard 仓库 clone 完毕后，**必须问用户**：
 ```bash
 python -c "
 import os, glob
-patterns = ['*.md','*.docx','*.doc','*.pdf','*.pptx','*.xlsx','*.csv','*.tex','*.drawio','*.dio','*.zip','*.rar','*.7z']
+patterns = ['*.md','*.docx','*.doc','*.pdf','*.pptx','*.xlsx','*.csv','*.tex','*.typ','*.drawio','*.dio','*.zip','*.rar','*.7z']
 found = {}
 for p in patterns:
     for f in glob.glob('**/'+p, recursive=True):
@@ -112,7 +114,7 @@ for ext, files in sorted(found.items()):
 ```
 
 按类型分组列出，标注大小：
-- 文档类：.md, .docx, .doc, .pdf, .tex
+- 文档类：.md, .docx, .doc, .pdf, .tex, .typ
 - 数据类：.xlsx, .csv
 - 演示类：.pptx
 - 图表类：.drawio, .dio
@@ -500,6 +502,62 @@ pdflatex -interaction=nonstopmode -output-directory=./output <file>.tex
 
 ---
 
+## Typst 编译支持
+
+Typst 是新一代排版系统，语法比 LaTeX 简洁，编译速度极快（增量编译），在大学生中快速流行。DocWizard 支持 `.typ` 文件的读取和编译。
+
+### 编译器检测
+
+```bash
+typst --version 2>/dev/null && echo "TYPST: available" || echo "TYPST: not found"
+```
+
+### 安装（按平台）
+
+| 平台 | 安装命令 |
+|------|----------|
+| Windows | `winget install --id Typst.Typst` |
+| macOS | `brew install typst` |
+| Linux | 下载二进制: https://github.com/typst/typst/releases |
+
+### 编译命令
+
+```bash
+# 编译为 PDF
+typst compile <file>.typ ./output/<file>.pdf
+
+# 编译为 PNG（逐页）
+typst compile <file>.typ ./output/<file>.png
+
+# 监听模式（增量编译，适合写作时实时预览）
+typst watch <file>.typ ./output/<file>.pdf
+```
+
+### 读取 .typ 文件内容
+
+`.typ` 文件是纯文本格式，agent 可以直接全文读入理解内容。Typst 语法与 Markdown 类似，包含：
+- `= 标题` / `== 二级标题`（标题层级）
+- `#figure()` 图表引用
+- `$...$` / `$ ... $` 行内/块级公式
+- `#bibliography("refs.bib")` 参考文献
+
+### 委托提示词模板
+
+```
+当前系统已安装 Typst 编译器。将以下 .typ 文件编译为 PDF：
+
+{文件路径}
+
+要求：
+1. 当前平台: {Windows/macOS/Linux}
+2. 编译器: typst
+3. 如果 .typ 文件引用了 .bib 文件，确保编译时能访问到
+4. 输出到 ./output/ 目录
+5. 如果用户需要，同时生成 PNG 预览
+```
+
+---
+
 ## PDF 解析增强
 
 当 document-skills 的 pdf skill 对扫描版 PDF 或复杂排版论文效果不佳时，可以引入专项 PDF 解析 Skill 作为补充。
@@ -649,6 +707,7 @@ def parse_bibtex(path):
 | `.pdf` | **委托 pdf skill 提取文字和表格 → 全文读入** |
 | `.pptx` | **委托 pptx skill 提取文字 → 全文读入** |
 | `.xlsx` / `.csv` | **委托 xlsx skill 读取结构和前20行 → 了解数据内容** |
+| `.tex` / `.typ` | **全文读入** — 纯文本格式，可直接理解内容 |
 | `.drawio` / `.dio` | **全文读入** — 检查图表引用 |
 | `task.md` | **全文读入** — 理解用户需求（只读不写！） |
 | `skill.json` | **全文读入** — 获取配置和转换规则 |
@@ -714,6 +773,7 @@ mmdc -i <file>.mmd -o <output>.png -s 2
 | `.pptx` | `.md` | pptx skill |
 | `.xlsx` / `.csv` | 分析报告 (.md + .docx + .xlsx) | xlsx skill + docx skill |
 | `.tex` | `.pdf` | 自动检测编译器 (tectonic > xelatex > pdflatex)，缺失则跳过并提示安装 |
+| `.typ` | `.pdf` + `.png` | 自动检测 typst 编译器，缺失则跳过并提示安装 |
 | `.drawio` | `.png` + `.svg` | DrawIO MCP |
 | `.zip` / `.rar` / `.7z` | 解压 → 扫描 → 加入队列 | Python zipfile / unrar / 7z |
 

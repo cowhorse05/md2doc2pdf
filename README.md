@@ -52,6 +52,7 @@ AI 会自动：
 | `.xlsx` / `.csv` | 分析报告 (.md + .docx + .xlsx) | 数据分析 + 图表 + 报告 |
 | `.drawio` | `.png` + `.svg` | 图表导出嵌入文档 |
 | `.tex` | `.pdf` | 自动检测编译器 (tectonic/xelatex/pdflatex) |
+| `.typ` | `.pdf` + `.png` | Typst 新一代排版，增量编译、语法简洁 |
 | `.zip` / `.rar` / `.7z` | 自动解压 → 处理其中文档 | 智能识别压缩包内 Word 需求文档 |
 
 ---
@@ -106,6 +107,24 @@ DOCX 不能渲染 Mermaid 代码块。DocWizard 自动检测 `.md` 中的 Mermai
 
 ---
 
+## Typst 编译
+
+Typst 是新一代排版系统，语法比 LaTeX 简洁，编译速度极快（增量编译），在大学生中快速流行。
+
+```bash
+# 安装（三平台）
+winget install --id Typst.Typst   # Windows
+brew install typst                # macOS
+# Linux: 下载 https://github.com/typst/typst/releases
+
+# 编译
+typst compile paper.typ output/paper.pdf
+```
+
+`.typ` 文件是纯文本，agent 可直接阅读和理解内容。
+
+---
+
 ## 智能场景
 
 **压缩包里有 Word 需求文档？** 解压后自动读取 `.docx`，识别是否为作业要求，是则以此为准执行任务。
@@ -138,6 +157,7 @@ cd .claude/skills/DocWizard && git pull origin main
 | CSV 中文乱码 | 自动尝试 GBK 编码 |
 | LaTeX 编译失败 | 安装 tectonic: `winget/brew/apt install tectonic` |
 | .tex 中文编译报错 | 用 xelatex 替代 pdflatex，或添加 `\usepackage{ctex}` |
+| Typst 编译失败 | 安装 typst: `winget/brew install typst` 或 https://github.com/typst/typst/releases |
 
 ---
 
@@ -156,6 +176,7 @@ DocWizard 基于以下优秀的 Claude Code 技能和开源项目构建：
 | Docling (IBM) | 高精度表格/公式识别参考 | [DS4SD/docling](https://github.com/DS4SD/docling) |
 | python-docx | Word 文档生成方案参考 | [python-docx](https://python-docx.readthedocs.io) |
 | DrawIO MCP | 复杂图表绘制与导出 | MCP 集成 |
+| `Typst` | 新一代排版系统（.typ → PDF） | [typst.app](https://typst.app) |
 | `tectonic` | LaTeX 编译引擎（推荐） | [tectonic-typesetting](https://github.com/tectonic-typesetting/tectonic) |
 | `Pdf It` (MCP) | Markdown→专业 PDF（目录/页码/字体嵌入） | MCP 生态 |
 | `skill-forge` | Skill 构建元工具 | Claude Code 官方 |
