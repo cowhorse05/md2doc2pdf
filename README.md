@@ -281,6 +281,14 @@ DocWizard builds upon these excellent Claude Code skills and open-source project
 | `Surya OCR` | Multilingual OCR + table detection + layout | [VikParuchuri](https://github.com/VikParuchuri/surya) |
 | `LlamaParse` | VLM-powered document parsing (tables+charts) | [LlamaIndex](https://www.llamaindex.ai/llamaparse) |
 | `SmolDocling` | 256M lightweight document parsing VLM | [DS4SD](https://github.com/DS4SD/docling) |
+| `GLM-OCR` | 0.9B open-source OCR, OmniDocBench #1 (94.62) | [zai-org](https://github.com/zai-org/GLM-OCR) |
+| `PyMuPDF4LLM` | CPU-only LLM-ready PDF extraction, 10x speed | [pymupdf](https://github.com/pymupdf/pymupdf4llm) |
+| `planning-with-files` | Persistent cross-session task planning (13K+ stars) | [OthmanAdi](https://github.com/OthmanAdi/planning-with-files) |
+| `deep-researcher` | Google Scholar → literature matrix → BibTeX | [jackswl](https://github.com/jackswl/deep-researcher) |
+| `PapersFlow MCP` | 474M+ papers, citation graph, systematic review | [PapersFlow](https://doxa.papersflow.ai/mcp) |
+| `PPTAgent` | ACL 2026, agentic PowerPoint generation + evaluation | ACL 2026 |
+| `anki-mcp-server` | Natural language → Anki flashcards via MCP | [ankimcp](https://github.com/ankimcp/anki-mcp-server) |
+| `Handoff` | Claude Code session compression for continuation | Matt Pocock |
 
 ---
 

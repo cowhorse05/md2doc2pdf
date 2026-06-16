@@ -306,7 +306,10 @@ except Exception as e:
   python helpers/render_mermaid.py <file.md> --output-dir ./output
   ```
 - 检测失败 → 跳过 Mermaid 渲染，在汇报中注明「⚠️ mermaid.ink 服务不可用，Mermaid 图表未能渲染为 PNG。DOCX 中将保留原始 Mermaid 代码块。」
-- 备选方案：安装 `mermaid-cli`（`npm install -g @mermaid-js/mermaid-cli`），后续可用 `mmdc` 本地渲染
+- 备选方案（按优先级）：
+  1. **Python `mmdc`** — 纯 Python，零 Node.js 依赖：`pip install mmdc`（自带 PhantomJS，完全离线）
+  2. **mermaid-cli** — Node.js 官方工具：`npm install -g @mermaid-js/mermaid-cli`
+  3. **Docker** — 隔离环境：`docker run --rm -v $(pwd):/data minlag/mermaid-cli`
 
 **渲染后验证**：检查输出 PNG 文件大小 > 100 bytes，否则视为失败。
 
@@ -444,6 +447,57 @@ print(f'CSV encoding: {enc}')
 
 全部处理完成，没有失败。
 ```
+
+### 阶段 7b：错误日志与人工审核辅助
+
+每次处理完成后，生成以下辅助文件：
+
+#### 7b-1. error_log.md — 错误可视化
+
+如果任何文件处理失败，在 `./output/error_log.md` 中记录失败详情：
+
+```
+# DocWizard 错误日志
+> 生成时间: 2026-06-16 14:30:00
+
+## 失败文件
+
+### paper.md
+- **错误**: Mermaid 图表渲染失败
+- **原因**: mermaid.ink 服务不可达（网络超时），且未安装本地备选（mmdc/mermaid-cli）
+- **建议**: 安装本地渲染器：pip install mmdc，或检查网络连接
+
+### scanned_notes.pdf
+- **错误**: OCR 识别失败
+- **原因**: PDF 为低分辨率扫描件（<150dpi），且所有 OCR 工具均未安装
+- **建议**: 安装 Chandra OCR：pip install chandra-ocr
+```
+
+#### 7b-2. check.md — 人工审核辅助
+
+AI 生成文档后，列出不确定的地方，帮助用户聚焦检查：
+
+```
+# DocWizard 人工审核提示
+> 以下项目 AI 置信度较低，建议重点检查
+
+## 公式 OCR 不确定
+- [ ] 第 3 页公式 2: "$$L_{KD} = ...$$" — OCR 置信度 72%
+- [ ] 第 5 页公式 5: "$$\frac{dN}{dt}$$" — 符号可能不完整
+
+## 表格识别不确定
+- [ ] sales_data.csv 第 15-18 行: 数值异常（销售额为负），请核对原始数据
+
+## 参考文献需人工确认
+- [ ] [3] Han et al. (2016) — DOI 验证通过，但作者名拼写请核对
+- [ ] [5] Hinton et al. (2015) — preprint，未找到正式发表版本
+```
+
+**check.md 生成规则**：
+- OCR 置信度 < 85% 的公式 → 列入 check.md
+- DOI 验证失败或仅 preprint 的引用 → 列入 check.md
+- 数据异常值（超出 3σ 范围）→ 列入 check.md
+- 表格单元格跨行/跨列无法确定的 → 列入 check.md
 
 ---
 
@@ -709,6 +763,23 @@ try:
 except ImportError:
     print('UNKNOWN: 无法检测，使用 pdf skill 默认方式')
 ```
+
+### 学术 PDF 布局还原（双栏/图表编号/公式编号）
+
+学术论文 PDF 通常有复杂排版（双栏、图表交叉引用、公式自动编号），基础 OCR 会丢失这些结构。针对此场景：
+
+| 工具 | 适用场景 | 特点 | 安装 |
+|------|----------|------|------|
+| **MinerU** | 中文学术论文 | 109 语言 OCR，双栏/跨页表格合并，公式→LaTeX，表格→HTML | `pip install magic-pdf`（上海 AI 实验室，中文优先优化） |
+| **Marker** | 英文学术论文 | Nougat 引擎公式→LaTeX，图片提取 + Markdown 内链，去除页眉页脚 | `pip install marker-pdf`（GPU 建议） |
+| **Docling** | CPU 环境/轻量 | MIT 许可，DocLayNet 布局分析 + TableFormer 表格，CPU 可用 | `pip install docling` |
+
+**选择策略**：
+- 中文学术论文 → 优先 **MinerU**（原生中文 OCR 优化）
+- 英文学术论文 → 优先 **Marker**（Nougat 公式引擎，公式保真度最高）
+- CPU 环境 / MIT 许可需求 → **Docling**（最轻量，无需 GPU）
+
+**交叉引用处理**：目前尚无工具能完全自动恢复 "图 3"、"表 2"、"公式 (5)" 的交叉引用链。布局还原后，agent 应对提取的 Markdown 做 LLM 后处理：识别 `\ref{fig:3}` 类引用标记，并检测编号一致性。
 
 ---
 

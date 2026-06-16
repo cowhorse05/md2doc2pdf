@@ -262,6 +262,14 @@ DocWizard 基于以下优秀的 Claude Code 技能和开源项目构建：
 | `Surya OCR` | 多语言 OCR + 表格检测 + 布局分析 | [VikParuchuri](https://github.com/VikParuchuri/surya) |
 | `LlamaParse` | VLM 驱动文档解析（表格+图表） | [LlamaIndex](https://www.llamaindex.ai/llamaparse) |
 | `SmolDocling` | 256M 轻量文档解析 VLM | [DS4SD](https://github.com/DS4SD/docling) |
+| `GLM-OCR` | 0.9B 开源 OCR，OmniDocBench 排名第一（94.62分） | [zai-org](https://github.com/zai-org/GLM-OCR) |
+| `PyMuPDF4LLM` | CPU-only LLM 就绪 PDF 提取，10 倍速度 | [pymupdf](https://github.com/pymupdf/pymupdf4llm) |
+| `planning-with-files` | 跨会话持久化任务计划（13K+ Stars） | [OthmanAdi](https://github.com/OthmanAdi/planning-with-files) |
+| `deep-researcher` | Google Scholar → 文献矩阵 → BibTeX | [jackswl](https://github.com/jackswl/deep-researcher) |
+| `PapersFlow MCP` | 4.74 亿篇论文 + 引文图谱 + 系统综述 | [PapersFlow](https://doxa.papersflow.ai/mcp) |
+| `PPTAgent` | ACL 2026，Agentic 幻灯片生成 + 评估框架 | ACL 2026 |
+| `anki-mcp-server` | 自然语言 → Anki 闪卡（MCP 集成） | [ankimcp](https://github.com/ankimcp/anki-mcp-server) |
+| `Handoff` | Claude Code 会话压缩，长程任务续接 | Matt Pocock |
 
 ---
 
