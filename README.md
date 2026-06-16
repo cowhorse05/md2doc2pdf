@@ -157,6 +157,8 @@ DocWizard 基于以下优秀的 Claude Code 技能和开源项目构建：
 | python-docx | Word 文档生成方案参考 | [python-docx](https://python-docx.readthedocs.io) |
 | DrawIO MCP | 复杂图表绘制与导出 | MCP 集成 |
 | `tectonic` | LaTeX 编译引擎（推荐） | [tectonic-typesetting](https://github.com/tectonic-typesetting/tectonic) |
+| `Pdf It` (MCP) | Markdown→专业 PDF（目录/页码/字体嵌入） | MCP 生态 |
+| `skill-forge` | Skill 构建元工具 | Claude Code 官方 |
 
 ---
 
