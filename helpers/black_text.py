@@ -27,12 +27,15 @@ NS_R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
 
 
 def _register_namespaces():
-    """Register OOXML namespaces so ElementTree uses prefixes (not ns0/ns1)."""
+    """Register OOXML namespaces so ElementTree uses prefixes (not ns0/ns1).
+    Deliberately does NOT register a default namespace — preserves the
+    w: prefix convention used by pandoc and Microsoft Word for
+    wordprocessingML elements.
+    """
     for prefix, uri in [('w', NS_W), ('a', NS_A), ('r', NS_R),
                          ('mc', 'http://schemas.openxmlformats.org/markup-compatibility/2006'),
                          ('w14', 'http://schemas.microsoft.com/office/word/2010/wordml')]:
         ET.register_namespace(prefix, uri)
-    ET.register_namespace('', NS_W)  # default namespace for w: elements
 
 
 def _patch_xml_with_etree(xml_bytes: bytes, xml_name: str) -> bytes:
