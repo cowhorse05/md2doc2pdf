@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """
 DOCX black-text post-processor.
-Patches ALL XML files inside a DOCX (ZIP) to force text color to pure black (#000000).
+Patches word/document.xml and word/styles.xml to force text color to
+pure black (#000000).  Uses xml.etree.ElementTree for safe, namespace-aware
+XML manipulation — deliberately avoids regex to prevent structural corruption
+(e.g. breaking self-closing tags in theme1.xml).
+
 Pure Python stdlib — zero dependencies.
 
 Usage:
@@ -14,12 +18,95 @@ import re
 import sys
 import zipfile
 from pathlib import Path
+from xml.etree import ElementTree as ET
+
+# OOXML namespaces
+NS_W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+NS_A = 'http://schemas.openxmlformats.org/drawingml/2006/main'
+NS_R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
+
+
+def _register_namespaces():
+    """Register OOXML namespaces so ElementTree uses prefixes (not ns0/ns1)."""
+    for prefix, uri in [('w', NS_W), ('a', NS_A), ('r', NS_R),
+                         ('mc', 'http://schemas.openxmlformats.org/markup-compatibility/2006'),
+                         ('w14', 'http://schemas.microsoft.com/office/word/2010/wordml')]:
+        ET.register_namespace(prefix, uri)
+    ET.register_namespace('', NS_W)  # default namespace for w: elements
+
+
+def _patch_xml_with_etree(xml_bytes: bytes, xml_name: str) -> bytes:
+    """Patch an OOXML XML file using ElementTree.
+
+    Only modifies word/styles.xml and word/document.xml — all other
+    XML files (especially word/theme/theme1.xml) are returned unchanged
+    to avoid corrupting DrawingML namespace elements (a:srgbClr, etc.).
+    """
+    # ── SAFETY: only patch known wordprocessingML files ──────────
+    SAFE_FILES = {'word/styles.xml', 'word/document.xml'}
+
+    if xml_name not in SAFE_FILES:
+        return xml_bytes
+
+    _register_namespaces()
+
+    try:
+        root = ET.fromstring(xml_bytes)
+    except ET.ParseError:
+        # Fallback for malformed XML: use scoped regex (w:color only)
+        xml_str = xml_bytes.decode('utf-8')
+        xml_str = re.sub(
+            r'(<w:color\b[^>]*?)w:val="[^"]*"',
+            r'\1w:val="000000"',
+            xml_str
+        )
+        # Strip theme color references (they would override w:val)
+        xml_str = re.sub(r'\s*w:themeColor="[^"]*"', '', xml_str)
+        xml_str = re.sub(r'\s*w:themeShade="[^"]*"', '', xml_str)
+        xml_str = re.sub(r'\s*w:themeTint="[^"]*"', '', xml_str)
+        return xml_str.encode('utf-8')
+
+    color_tag = f'{{{NS_W}}}color'
+    for elem in root.iter(color_tag):
+        val_attr = f'{{{NS_W}}}val'
+        if val_attr in elem.attrib:
+            elem.set(val_attr, '000000')
+        # Remove theme color references — they override explicit w:val
+        for theme_attr in (f'{{{NS_W}}}themeColor', f'{{{NS_W}}}themeShade',
+                           f'{{{NS_W}}}themeTint'):
+            if theme_attr in elem.attrib:
+                del elem.attrib[theme_attr]
+
+    # For styles.xml: ensure <w:rPrDefault> forces black as document default
+    if xml_name == 'word/styles.xml':
+        doc_defaults = root.find(f'{{{NS_W}}}docDefaults')
+        if doc_defaults is not None:
+            rpr_default = doc_defaults.find(f'{{{NS_W}}}rPrDefault')
+            if rpr_default is None:
+                rpr_default = ET.SubElement(doc_defaults,
+                                            f'{{{NS_W}}}rPrDefault')
+            rpr = rpr_default.find(f'{{{NS_W}}}rPr')
+            if rpr is None:
+                rpr = ET.SubElement(rpr_default, f'{{{NS_W}}}rPr')
+            # Only add w:color if not already present
+            existing = rpr.find(f'{{{NS_W}}}color')
+            if existing is None:
+                color = ET.SubElement(rpr, f'{{{NS_W}}}color')
+                color.set(f'{{{NS_W}}}val', '000000')
+
+    return ET.tostring(root, encoding='utf-8', xml_declaration=True)
 
 
 def force_black_text_in_docx(docx_path: Path) -> bool:
     """Post-process a docx file to force ALL text to black.
-    Patches ALL XML files in the ZIP, plus the theme to neutralize colors.
-    Aggressive mode: replaces any 6-char hex color with 000000.
+
+    Uses xml.etree.ElementTree for safe namespace-aware XML manipulation.
+    Only patches word/document.xml and word/styles.xml — deliberately
+    skips word/theme/theme1.xml because theme files use the DrawingML
+    namespace (a:srgbClr) which has different element structure than
+    wordprocessingML (w:color).  Broad regex on theme files can break
+    self-closing tags and corrupt the DOCX.
+
     Returns True on success.
     """
     try:
@@ -29,71 +116,17 @@ def force_black_text_in_docx(docx_path: Path) -> bool:
 
         patched = 0
 
-        # Patch ALL XML files for color attributes
         for name in list(files.keys()):
             if not name.endswith('.xml'):
                 continue
             try:
-                xml = files[name].decode('utf-8')
-            except UnicodeDecodeError:
+                new_xml = _patch_xml_with_etree(files[name], name)
+            except Exception:
                 continue
 
-            original = xml
-
-            # 1. Replace all w:color values with 000000
-            xml = re.sub(
-                r'(<w:color\b[^>]*?)w:val="[^"]*"',
-                r'\1w:val="000000"',
-                xml
-            )
-
-            # 2. Kill all themeColor/themeShade/themeTint — they override w:val
-            xml = re.sub(r'\s*w:themeColor="[^"]*"', '', xml)
-            xml = re.sub(r'\s*w:themeShade="[^"]*"', '', xml)
-            xml = re.sub(r'\s*w:themeTint="[^"]*"', '', xml)
-
-            # 3. Aggressive: any standalone w:val="XXXXXX" (6-char hex) → 000000
-            xml = re.sub(
-                r'(w:val=")([0-9A-Fa-f]{6})(")',
-                r'\g<1>000000\3',
-                xml
-            )
-
-            if xml != original:
-                files[name] = xml.encode('utf-8')
+            if new_xml != files[name]:
+                files[name] = new_xml
                 patched += 1
-
-        # Also patch theme XML to neutralize theme colors
-        theme_paths = [
-            'word/theme/theme1.xml',
-            'word/theme/theme.xml',
-            'word/theme/theme2.xml',
-        ]
-        for tp in theme_paths:
-            if tp in files:
-                xml = files[tp].decode('utf-8')
-                original = xml
-                # Replace all theme color values with black
-                xml = re.sub(
-                    r'(<a:dk1>|<a:lt1>|<a:dk2>|<a:lt2>|<a:accent\d>|<a:hlink>|<a:folHlink>).*?</\1>',
-                    r'\g<1><a:srgbClr val="000000"/></\1>',
-                    xml
-                )
-                # Nuke all srgbClr values in theme
-                xml = re.sub(
-                    r'<a:srgbClr val="[^"]*"',
-                    '<a:srgbClr val="000000"',
-                    xml
-                )
-                # Kill systemClr references
-                xml = re.sub(
-                    r'<a:sysClr val="[^"]*"[^>]*>',
-                    '<a:srgbClr val="000000">',
-                    xml
-                )
-                if xml != original:
-                    files[tp] = xml.encode('utf-8')
-                    patched += 1
 
         if patched == 0:
             return True  # Nothing changed, already clean

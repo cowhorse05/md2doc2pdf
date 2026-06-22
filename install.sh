@@ -127,8 +127,11 @@ except Exception as e:
 # ── Check document-skills plugin ───────────────────────────────────
 echo ""
 echo -e "${YELLOW}检测 document-skills 插件 ...${NC}"
-echo -e "  如果你用的是 ${CYAN}Claude Code${NC} 或 ${CYAN}OpenCode${NC}，请在 AI 对话中执行:"
-echo -e "    ${CYAN}/plugin install document-skills@anthropic-agent-skills${NC}"
+echo -e "  如果你用的是 ${CYAN}Claude Code${NC} 或 ${CYAN}OpenCode${NC}，请在 AI 对话中依次执行:"
+echo -e "    ${CYAN}1. /plugin marketplace add anthropics/skills${NC}"
+echo -e "    ${CYAN}2. /plugin install document-skills@anthropic-agent-skills${NC}"
+echo ""
+echo -e "  ${YELLOW}注意：必须先添加 marketplace，否则第二步会报 Marketplace not found。${NC}"
 echo ""
 echo -e "  如果你用的是 ${CYAN}Codex${NC} 或 ${CYAN}Cursor${NC}，请安装 Python 依赖:"
 echo -e "    ${CYAN}pip install python-docx python-pptx openpyxl pdfplumber pandas${NC}"

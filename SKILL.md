@@ -92,8 +92,10 @@ python3 --version 2>/dev/null && echo "USE: python3" || python --version 2>/dev/
 
 1. **document-skills 插件**（必须）
    ```bash
+   /plugin marketplace add anthropics/skills
    /plugin install document-skills@anthropic-agent-skills
    ```
+   **⚠️ 必须按顺序执行**：先添加 marketplace，再安装插件。跳过第一步会导致 `Marketplace "anthropic-agent-skills" not found` 错误。
    此插件包含：docx、pdf、pptx、xlsx 四个 Skill，一次安装全部可用。
 
 2. **DocWizard 仓库**
@@ -127,6 +129,30 @@ DocWizard 仓库 clone 完毕后，**必须问用户**：
 1. **检测平台**：`python -c "import platform; print(platform.system())"`
 2. **确认 Python 命令**：`python3 --version` 失败则用 `python`
 3. **确认 document-skills 插件可用**（尝试调用 docx/pdf/pptx/xlsx skill 的能力）
+
+   **⚠️ 插件不可用时，必须硬性阻断，禁止进入降级路径：**
+   
+   检测 document-skills 插件:
+     ├─ 已安装 → ✅ 进入正常流程
+     └─ 未安装 → ❌ 终止执行，输出:
+   
+   ```
+   ╔══════════════════════════════════════════════╗
+   ║  DocWizard 依赖缺失                           ║
+   ║                                              ║
+   ║  document-skills 插件未安装！                  ║
+   ║  请依次执行以下命令后重试：                      ║
+   ║                                              ║
+   ║  1. /plugin marketplace add anthropics/skills ║
+   ║  2. /plugin install document-skills@...       ║
+   ║                                              ║
+   ║  或手动安装 Python 降级依赖（不推荐）：           ║
+   ║  pip install python-docx python-pptx ...      ║
+   ╚══════════════════════════════════════════════╝
+   ```
+   
+   **理由**：document-skills 是硬依赖。降级路径（pandoc/weasyprint/libreoffice/python-docx）在绝大多数学生电脑上不可用，静默降级会导致用户以为"装好了"，一用就卡在缺依赖。
+
 4. **检测 Typst 编译器**：`typst --version`（可选，用于 .typ 文件编译）
 5. **检测 LaTeX 编译器**：`tectonic --version || xelatex --version || pdflatex --version`（可选）
 6. **确认输出目录** `./output/` 存在（不存在则创建）
